@@ -68,6 +68,9 @@ class Course(db.Model):
 
 class CourseRequest(db.Model):
     __tablename__ = "cs_course_requests"
+    __table_args__ = (
+        db.UniqueConstraint("student_id", "course_id", name="uq_cs_request_student_course"),
+    )
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     student_id = db.Column(db.String(20), nullable=False, index=True)
@@ -143,6 +146,26 @@ def serialize_request(course_request):
     }
 
 
+def serialize_slot(slot):
+    return {
+        "slot_id": slot.slot_id,
+        "weekday": slot.weekday,
+        "start_time": slot.start_time,
+        "end_time": slot.end_time,
+        "label": slot.label,
+    }
+
+
+def serialize_run(run):
+    return {
+        "id": run.id,
+        "run_by": run.run_by,
+        "status": run.status,
+        "summary": run.summary,
+        "created_at": run.created_at.isoformat(),
+    }
+
+
 def serialize_result(result):
     return {
         "id": result.id,
@@ -187,6 +210,18 @@ def verify_token_with_main_service(token):
     if not data.get("valid"):
         return None
     return {"user_id": data.get("user_id"), "user_type": data.get("user_type")}
+
+
+def parse_positive_int(value, field_name, default=None):
+    if value is None:
+        return default
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{field_name} must be an integer")
+    if parsed <= 0:
+        raise ValueError(f"{field_name} must be greater than 0")
+    return parsed
 
 
 def require_auth(*allowed_types):
@@ -254,7 +289,10 @@ def run_schedule_agent(run_by):
     db.session.flush()
 
     for course in courses:
-        requests_for_course = CourseRequest.query.filter_by(course_id=course.course_id).all()
+        requests_for_course = CourseRequest.query.filter_by(
+            course_id=course.course_id,
+            status="submitted",
+        ).all()
         request_count = len(requests_for_course)
         best = None
 
@@ -316,18 +354,99 @@ def create_course(_user):
     if db.session.get(Course, data["course_id"]):
         return jsonify({"success": False, "message": "课程编号已存在"}), 409
 
+    try:
+        capacity = parse_positive_int(data.get("capacity"), "capacity", 40)
+        hours_per_week = parse_positive_int(data.get("hours_per_week"), "hours_per_week", 2)
+    except ValueError as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
+
     course = Course(
         course_id=data["course_id"],
         course_name=data["course_name"],
         teacher_id=data.get("teacher_id"),
-        capacity=int(data.get("capacity", 40)),
-        hours_per_week=int(data.get("hours_per_week", 2)),
+        capacity=capacity,
+        hours_per_week=hours_per_week,
         preferred_building=data.get("preferred_building"),
         status=data.get("status", "open"),
     )
     db.session.add(course)
     db.session.commit()
     return jsonify({"success": True, "data": serialize_course(course)}), 201
+
+
+@app.route("/api/course-schedule/courses/<course_id>", methods=["PUT"])
+@require_auth("admin")
+def update_course(_user, course_id):
+    course = db.session.get(Course, course_id)
+    if not course:
+        return jsonify({"success": False, "message": "课程不存在"}), 404
+
+    data = request.get_json() or {}
+    try:
+        capacity = parse_positive_int(data.get("capacity"), "capacity", course.capacity)
+        hours_per_week = parse_positive_int(
+            data.get("hours_per_week"),
+            "hours_per_week",
+            course.hours_per_week,
+        )
+    except ValueError as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
+
+    course.course_name = data.get("course_name", course.course_name)
+    course.teacher_id = data.get("teacher_id", course.teacher_id)
+    course.capacity = capacity
+    course.hours_per_week = hours_per_week
+    course.preferred_building = data.get("preferred_building", course.preferred_building)
+    course.status = data.get("status", course.status)
+    db.session.commit()
+    return jsonify({"success": True, "data": serialize_course(course)})
+
+
+@app.route("/api/course-schedule/courses/<course_id>", methods=["DELETE"])
+@require_auth("admin")
+def delete_course(_user, course_id):
+    course = db.session.get(Course, course_id)
+    if not course:
+        return jsonify({"success": False, "message": "课程不存在"}), 404
+
+    CourseRequest.query.filter_by(course_id=course_id).delete()
+    ScheduleResult.query.filter_by(course_id=course_id).delete()
+    db.session.delete(course)
+    db.session.commit()
+    return jsonify({"success": True, "message": "课程已删除"})
+
+
+@app.route("/api/course-schedule/time-slots", methods=["GET"])
+@require_auth("student", "admin")
+def list_time_slots(_user):
+    slots = TimeSlot.query.order_by(TimeSlot.weekday, TimeSlot.start_time).all()
+    return jsonify({"success": True, "data": [serialize_slot(slot) for slot in slots]})
+
+
+@app.route("/api/course-schedule/time-slots", methods=["POST"])
+@require_auth("admin")
+def create_time_slot(_user):
+    data = request.get_json() or {}
+    required = ["weekday", "start_time", "end_time"]
+    if any(not data.get(field) for field in required):
+        return jsonify({"success": False, "message": "weekday、start_time 和 end_time 必填"}), 400
+
+    try:
+        weekday = parse_positive_int(data.get("weekday"), "weekday")
+    except ValueError as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
+    if weekday > 7:
+        return jsonify({"success": False, "message": "weekday must be between 1 and 7"}), 400
+
+    slot = TimeSlot(
+        weekday=weekday,
+        start_time=data["start_time"],
+        end_time=data["end_time"],
+        label=data.get("label"),
+    )
+    db.session.add(slot)
+    db.session.commit()
+    return jsonify({"success": True, "data": serialize_slot(slot)}), 201
 
 
 @app.route("/api/course-schedule/requests", methods=["POST"])
@@ -360,6 +479,20 @@ def submit_course_request(user):
     return jsonify({"success": True, "data": serialize_request(course_request)}), 201
 
 
+@app.route("/api/course-schedule/requests/<int:request_id>", methods=["DELETE"])
+@require_auth("student")
+def cancel_course_request(user, request_id):
+    course_request = db.session.get(CourseRequest, request_id)
+    if not course_request or course_request.student_id != user["user_id"]:
+        return jsonify({"success": False, "message": "选课申请不存在"}), 404
+    if course_request.status == "scheduled":
+        return jsonify({"success": False, "message": "已排课的申请不能撤销"}), 400
+
+    course_request.status = "cancelled"
+    db.session.commit()
+    return jsonify({"success": True, "data": serialize_request(course_request)})
+
+
 @app.route("/api/course-schedule/my-requests", methods=["GET"])
 @require_auth("student")
 def list_my_requests(user):
@@ -382,6 +515,13 @@ def list_all_requests(_user):
         "success": True,
         "data": [serialize_request(course_request) for course_request in requests_for_courses],
     })
+
+
+@app.route("/api/course-schedule/schedule-runs", methods=["GET"])
+@require_auth("admin")
+def list_schedule_runs(_user):
+    runs = ScheduleRun.query.order_by(ScheduleRun.created_at.desc()).all()
+    return jsonify({"success": True, "data": [serialize_run(run) for run in runs]})
 
 
 @app.route("/api/course-schedule/agent/schedule", methods=["POST"])
