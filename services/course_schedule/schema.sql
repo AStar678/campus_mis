@@ -1,5 +1,12 @@
 -- Course Scheduling Service tables.
 -- These tables are owned by services/course_schedule and use the cs_ prefix.
+-- Public data such as classrooms, buildings and building_adjacency stays in main_database.
+
+CREATE DATABASE IF NOT EXISTS course_schedule_database
+    DEFAULT CHARACTER SET utf8mb4
+    COLLATE utf8mb4_general_ci;
+
+USE course_schedule_database;
 
 CREATE TABLE IF NOT EXISTS cs_courses (
     course_id VARCHAR(20) PRIMARY KEY,
