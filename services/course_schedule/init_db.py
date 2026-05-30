@@ -1,9 +1,30 @@
-from app import Course, TimeSlot, app, db
+import pymysql
+
+from app import Course, DB_HOST, DB_NAME, DB_PASS_RAW, DB_PORT, DB_USER, TimeSlot, app, db
+
+
+def create_database():
+    conn = pymysql.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        user=DB_USER,
+        password=DB_PASS_RAW,
+        charset="utf8mb4",
+    )
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                f"CREATE DATABASE IF NOT EXISTS `{DB_NAME}` "
+                "DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci"
+            )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def init_tables():
     with app.app_context():
-        db.create_all()
+        db.metadatas[None].create_all(bind=db.engines[None])
 
 
 def insert_seed_data():
@@ -51,6 +72,7 @@ def insert_seed_data():
 
 
 if __name__ == "__main__":
+    create_database()
     init_tables()
     insert_seed_data()
-    print("course_schedule tables initialized")
+    print(f"{DB_NAME} tables initialized")

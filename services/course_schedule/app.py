@@ -1,5 +1,14 @@
+"""Course selection and intelligent scheduling service.
+
+This sub-service owns the course scheduling business tables in
+course_schedule_database. It reads shared classroom and building data from
+main_database, and delegates login validation to the main service through
+/api/verify-token.
+"""
+
 from datetime import datetime
 from functools import wraps
+from urllib.parse import quote_plus, unquote
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 import json
@@ -13,16 +22,26 @@ from flask_sqlalchemy import SQLAlchemy
 app = Flask(__name__)
 CORS(app)
 
+# Database configuration.
+#
+# Default bind: course_schedule_database, owned by this service.
+# "main" bind: main_database, read-only shared campus data from the main service.
 DB_HOST = os.getenv("DB_HOST", "47.93.226.110")
 DB_PORT = int(os.getenv("DB_PORT", "3306"))
 DB_USER = os.getenv("DB_USER", "root")
 DB_PASS = os.getenv("DB_PASS", "")
-DB_NAME = os.getenv("DB_NAME", "main_database")
+DB_PASS_RAW = os.getenv("DB_PASS_RAW", unquote(DB_PASS))
+DB_PASS_QUOTED = quote_plus(DB_PASS_RAW)
+DB_NAME = os.getenv("COURSE_DB_NAME", "course_schedule_database")
+MAIN_DB_NAME = os.getenv("MAIN_DB_NAME", "main_database")
 MAIN_SERVICE_URL = os.getenv("MAIN_SERVICE_URL", "http://127.0.0.1:5001")
 
 app.config["SQLALCHEMY_DATABASE_URI"] = (
-    f"mysql+pymysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    f"mysql+pymysql://{DB_USER}:{DB_PASS_QUOTED}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 )
+app.config["SQLALCHEMY_BINDS"] = {
+    "main": f"mysql+pymysql://{DB_USER}:{DB_PASS_QUOTED}@{DB_HOST}:{DB_PORT}/{MAIN_DB_NAME}",
+}
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
@@ -30,6 +49,9 @@ db = SQLAlchemy(app)
 
 # Public tables owned by the main service. This service reads them only.
 class Classroom(db.Model):
+    """Read-only classroom metadata from main_database."""
+
+    __bind_key__ = "main"
     __tablename__ = "classrooms"
 
     classroom_id = db.Column(db.String(4), primary_key=True)
@@ -37,6 +59,9 @@ class Classroom(db.Model):
 
 
 class Building(db.Model):
+    """Read-only campus building metadata from main_database."""
+
+    __bind_key__ = "main"
     __tablename__ = "buildings"
 
     building_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -44,6 +69,9 @@ class Building(db.Model):
 
 
 class BuildingAdjacency(db.Model):
+    """Read-only distance edges between campus buildings."""
+
+    __bind_key__ = "main"
     __tablename__ = "building_adjacency"
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -54,6 +82,8 @@ class BuildingAdjacency(db.Model):
 
 # Course scheduling tables owned by this service.
 class Course(db.Model):
+    """Course options that students can request and admins can schedule."""
+
     __tablename__ = "cs_courses"
 
     course_id = db.Column(db.String(20), primary_key=True)
@@ -67,6 +97,8 @@ class Course(db.Model):
 
 
 class CourseRequest(db.Model):
+    """A student's course selection request."""
+
     __tablename__ = "cs_course_requests"
     __table_args__ = (
         db.UniqueConstraint("student_id", "course_id", name="uq_cs_request_student_course"),
@@ -83,6 +115,8 @@ class CourseRequest(db.Model):
 
 
 class TimeSlot(db.Model):
+    """Candidate time slots available for scheduling."""
+
     __tablename__ = "cs_time_slots"
 
     slot_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -93,6 +127,8 @@ class TimeSlot(db.Model):
 
 
 class ScheduleRun(db.Model):
+    """One execution record of the scheduling agent."""
+
     __tablename__ = "cs_schedule_runs"
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -103,6 +139,8 @@ class ScheduleRun(db.Model):
 
 
 class ScheduleResult(db.Model):
+    """Generated course-classroom-timeslot assignment."""
+
     __tablename__ = "cs_schedule_results"
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -121,6 +159,8 @@ class ScheduleResult(db.Model):
 
 
 def serialize_course(course):
+    """Convert a Course row to the API response shape."""
+
     request_count = CourseRequest.query.filter_by(course_id=course.course_id).count()
     return {
         "course_id": course.course_id,
@@ -135,6 +175,8 @@ def serialize_course(course):
 
 
 def serialize_request(course_request):
+    """Convert a CourseRequest row to the API response shape."""
+
     return {
         "id": course_request.id,
         "student_id": course_request.student_id,
@@ -147,6 +189,8 @@ def serialize_request(course_request):
 
 
 def serialize_slot(slot):
+    """Convert a TimeSlot row to the API response shape."""
+
     return {
         "slot_id": slot.slot_id,
         "weekday": slot.weekday,
@@ -157,6 +201,8 @@ def serialize_slot(slot):
 
 
 def serialize_run(run):
+    """Convert a ScheduleRun row to the API response shape."""
+
     return {
         "id": run.id,
         "run_by": run.run_by,
@@ -167,6 +213,8 @@ def serialize_run(run):
 
 
 def serialize_result(result):
+    """Convert a ScheduleResult row to the API response shape."""
+
     return {
         "id": result.id,
         "run_id": result.run_id,
@@ -186,6 +234,8 @@ def serialize_result(result):
 
 
 def get_bearer_token():
+    """Read token from Authorization header, with query-string fallback for testing."""
+
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
         return auth_header.replace("Bearer ", "", 1).strip()
@@ -193,6 +243,8 @@ def get_bearer_token():
 
 
 def verify_token_with_main_service(token):
+    """Ask the main service whether the incoming token is valid."""
+
     if not token:
         return None
 
@@ -213,6 +265,8 @@ def verify_token_with_main_service(token):
 
 
 def parse_positive_int(value, field_name, default=None):
+    """Parse a positive integer field from request JSON."""
+
     if value is None:
         return default
     try:
@@ -225,6 +279,8 @@ def parse_positive_int(value, field_name, default=None):
 
 
 def require_auth(*allowed_types):
+    """Require a valid main-service token and optional role constraints."""
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -241,6 +297,8 @@ def require_auth(*allowed_types):
 
 
 def get_distance_between_buildings(building_name_a, building_name_b):
+    """Return known walking distance between two buildings, or a fallback penalty."""
+
     if not building_name_a or not building_name_b or building_name_a == building_name_b:
         return 0
 
@@ -258,6 +316,8 @@ def get_distance_between_buildings(building_name_a, building_name_b):
 
 
 def score_assignment(course, classroom, slot, request_count, used_pairs):
+    """Score one candidate assignment for the rule-based scheduling agent."""
+
     capacity_gap = course.capacity - request_count
     capacity_score = 40 if capacity_gap >= 0 else max(0, 40 + capacity_gap * 2)
     demand_score = min(request_count, course.capacity) * 1.5
@@ -274,6 +334,13 @@ def score_assignment(course, classroom, slot, request_count, used_pairs):
 
 
 def run_schedule_agent(run_by):
+    """Generate schedule results with a rule-based agent.
+
+    The current implementation is deterministic and explainable: it evaluates
+    course demand, capacity fit, classroom time conflicts, and building
+    distance. This keeps the feature demonstrable before plugging in a real LLM.
+    """
+
     courses = Course.query.filter_by(status="open").all()
     classrooms = Classroom.query.all()
     slots = TimeSlot.query.all()
@@ -334,12 +401,16 @@ def run_schedule_agent(run_by):
 
 @app.route("/api/course-schedule/health", methods=["GET"])
 def health_check():
+    """Health check for service discovery and local debugging."""
+
     return jsonify({"status": "ok", "service": "course-schedule-service", "port": 5004})
 
 
 @app.route("/api/course-schedule/courses", methods=["GET"])
 @require_auth("student", "admin")
 def list_courses(_user):
+    """List course options for students and admins."""
+
     courses = Course.query.order_by(Course.course_id).all()
     return jsonify({"success": True, "data": [serialize_course(course) for course in courses]})
 
@@ -347,6 +418,8 @@ def list_courses(_user):
 @app.route("/api/course-schedule/courses", methods=["POST"])
 @require_auth("admin")
 def create_course(_user):
+    """Create a course option. Admin only."""
+
     data = request.get_json() or {}
     required = ["course_id", "course_name"]
     if any(not data.get(field) for field in required):
@@ -377,6 +450,8 @@ def create_course(_user):
 @app.route("/api/course-schedule/courses/<course_id>", methods=["PUT"])
 @require_auth("admin")
 def update_course(_user, course_id):
+    """Update a course option. Admin only."""
+
     course = db.session.get(Course, course_id)
     if not course:
         return jsonify({"success": False, "message": "课程不存在"}), 404
@@ -405,6 +480,8 @@ def update_course(_user, course_id):
 @app.route("/api/course-schedule/courses/<course_id>", methods=["DELETE"])
 @require_auth("admin")
 def delete_course(_user, course_id):
+    """Delete a course and its local scheduling records. Admin only."""
+
     course = db.session.get(Course, course_id)
     if not course:
         return jsonify({"success": False, "message": "课程不存在"}), 404
@@ -419,6 +496,8 @@ def delete_course(_user, course_id):
 @app.route("/api/course-schedule/time-slots", methods=["GET"])
 @require_auth("student", "admin")
 def list_time_slots(_user):
+    """List candidate scheduling time slots."""
+
     slots = TimeSlot.query.order_by(TimeSlot.weekday, TimeSlot.start_time).all()
     return jsonify({"success": True, "data": [serialize_slot(slot) for slot in slots]})
 
@@ -426,6 +505,8 @@ def list_time_slots(_user):
 @app.route("/api/course-schedule/time-slots", methods=["POST"])
 @require_auth("admin")
 def create_time_slot(_user):
+    """Create a candidate scheduling time slot. Admin only."""
+
     data = request.get_json() or {}
     required = ["weekday", "start_time", "end_time"]
     if any(not data.get(field) for field in required):
@@ -452,6 +533,8 @@ def create_time_slot(_user):
 @app.route("/api/course-schedule/requests", methods=["POST"])
 @require_auth("student")
 def submit_course_request(user):
+    """Submit or update the current student's course request."""
+
     data = request.get_json() or {}
     course_id = data.get("course_id")
     if not course_id:
@@ -482,6 +565,8 @@ def submit_course_request(user):
 @app.route("/api/course-schedule/requests/<int:request_id>", methods=["DELETE"])
 @require_auth("student")
 def cancel_course_request(user, request_id):
+    """Cancel the current student's request before it is scheduled."""
+
     course_request = db.session.get(CourseRequest, request_id)
     if not course_request or course_request.student_id != user["user_id"]:
         return jsonify({"success": False, "message": "选课申请不存在"}), 404
@@ -496,6 +581,8 @@ def cancel_course_request(user, request_id):
 @app.route("/api/course-schedule/my-requests", methods=["GET"])
 @require_auth("student")
 def list_my_requests(user):
+    """List course requests submitted by the current student."""
+
     requests_for_student = CourseRequest.query.filter_by(student_id=user["user_id"]).all()
     return jsonify({
         "success": True,
@@ -506,6 +593,8 @@ def list_my_requests(user):
 @app.route("/api/course-schedule/requests", methods=["GET"])
 @require_auth("admin")
 def list_all_requests(_user):
+    """List all course requests, optionally filtered by course_id. Admin only."""
+
     course_id = request.args.get("course_id")
     query = CourseRequest.query
     if course_id:
@@ -520,6 +609,8 @@ def list_all_requests(_user):
 @app.route("/api/course-schedule/schedule-runs", methods=["GET"])
 @require_auth("admin")
 def list_schedule_runs(_user):
+    """List scheduling agent execution records. Admin only."""
+
     runs = ScheduleRun.query.order_by(ScheduleRun.created_at.desc()).all()
     return jsonify({"success": True, "data": [serialize_run(run) for run in runs]})
 
@@ -527,6 +618,8 @@ def list_schedule_runs(_user):
 @app.route("/api/course-schedule/agent/schedule", methods=["POST"])
 @require_auth("admin")
 def schedule_courses(user):
+    """Trigger the rule-based intelligent scheduling agent. Admin only."""
+
     run, error = run_schedule_agent(user["user_id"])
     if error:
         return jsonify({"success": False, "message": error}), 400
@@ -544,6 +637,12 @@ def schedule_courses(user):
 @app.route("/api/course-schedule/results", methods=["GET"])
 @require_auth("student", "admin")
 def list_results(user):
+    """List schedule results.
+
+    Admins can see all generated results. Students only see published results
+    for courses they requested.
+    """
+
     query = ScheduleResult.query
     if user["user_type"] == "student":
         requested_course_ids = [
@@ -560,6 +659,8 @@ def list_results(user):
 @app.route("/api/course-schedule/results/publish", methods=["POST"])
 @require_auth("admin")
 def publish_results(_user):
+    """Publish generated schedule results so students can view them."""
+
     updated = ScheduleResult.query.update({"is_published": True})
     db.session.commit()
     return jsonify({"success": True, "message": f"已发布 {updated} 条排课结果"})

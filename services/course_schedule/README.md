@@ -1,6 +1,6 @@
 # 选课与智能排课分服务
 
-本服务负责程瑶的“选课 & 智能排课系统”，作为独立分服务运行，默认端口 `5004`。
+本服务负责“选课 & 智能排课系统”，作为独立分服务运行，默认端口 `5004`。
 
 ## 认证方式
 
@@ -18,9 +18,15 @@ GET http://127.0.0.1:5001/api/verify-token
 
 验证成功后，根据 `user_type` 控制权限。
 
-## 数据表
+## 数据库
 
-本服务新增自己的业务表，统一使用 `cs_` 前缀：
+本服务使用独立业务库：
+
+```text
+course_schedule_database
+```
+
+业务表统一使用 `cs_` 前缀：
 
 - `cs_courses`: 课程信息
 - `cs_course_requests`: 学生选课申请
@@ -28,7 +34,13 @@ GET http://127.0.0.1:5001/api/verify-token
 - `cs_schedule_runs`: 智能排课任务记录
 - `cs_schedule_results`: 排课结果
 
-公共表只读取，不修改：
+公共数据仍从主服务数据库只读：
+
+```text
+main_database
+```
+
+只读取这些公共表，不修改结构：
 
 - `classrooms`
 - `buildings`
@@ -71,4 +83,12 @@ GET http://127.0.0.1:5001/api/verify-token
 ```bash
 python services/course_schedule/init_db.py
 python services/course_schedule/app.py
+```
+
+可通过环境变量覆盖数据库配置：
+
+```bash
+COURSE_DB_NAME=course_schedule_database
+MAIN_DB_NAME=main_database
+MAIN_SERVICE_URL=http://127.0.0.1:5001
 ```
