@@ -6,14 +6,17 @@ import jwt
 import hashlib
 import os
 
-app = Flask(__name__, static_folder='../frontend', static_url_path='')
+# 前端文件路径（兼容本地开发和 Docker）
+FRONTEND_DIR = os.environ.get('FRONTEND_DIR', os.path.join(os.path.dirname(__file__), '..', 'frontend'))
+
+app = Flask(__name__, static_folder=FRONTEND_DIR, static_url_path='')
 CORS(app)
 
 # ============ 配置 ============
-DB_HOST = '47.93.226.110'
-DB_PORT = 3306
-DB_USER = 'root'
-DB_PASS = ''  # ，@需要URL编码为%40
+DB_HOST = os.environ.get('DB_HOST', '47.93.226.110')
+DB_PORT = int(os.environ.get('DB_PORT', 3306))
+DB_USER = os.environ.get('DB_USER', 'root')
+DB_PASS = os.environ.get('DB_PASS', '')  # ，@需要URL编码为%40
 
 app.config['SECRET_KEY'] = 'campus-mis-secret-key-2024'
 # 主数据库：main_database（会话、服务注册、建筑等）
@@ -268,7 +271,7 @@ def health_check():
 
 @app.route('/')
 def serve_index():
-    return send_from_directory(os.path.join(os.path.dirname(__file__), '..', 'frontend'), 'index.html')
+    return send_from_directory(FRONTEND_DIR, 'index.html')
 
 @app.route('/favicon.ico')
 def favicon():
