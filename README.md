@@ -1,32 +1,65 @@
-# 项目说明
-受云服务器性能限制，本项目现阶段采用**本地开发 + 云端数据库**的部署方式。当前为主工程代码，已完成登录功能，并打通云端数据库连接。
-云端已部署对应微服务，各位可根据分配端口，独立开发对应业务功能。
+# 主服务部署与重启教程
 
-## 一、任务分工与模块功能
-### 1. 基础信息管理系统 — 敖翔
-覆盖**学生端、教师端、管理端**三类角色：
-- 教师端：查看个人课程相关数据
-- 学生端：查询个人学分、成绩信息
-- 管理端：查看全校人员信息
+## 服务器信息
 
-### 2. 课堂教学系统 — 陈梦茹
-覆盖**学生端、教师端、管理端**三类角色，可延伸开发DDL管理子系统：
-- 教师端：发布作业、课堂公告，接入AI作业批改能力，录入学生成绩
-- 学生端：在线提交作业
-- 管理端：课程新增/删除、分配授课教师
+- IP: `47.93.226.110`
+- 服务端口: `5001`
+- 项目路径: `/root/MIS2`
+- 访问地址: `http://47.93.226.110:5001`
 
-### 3. 选课&智能排课系统 — 程瑶
-覆盖**学生端、管理端**两类角色：
-- 学生端：提交选课申请
-- 管理端：基于AI Agent实现智能排课，综合学生选课意愿、教室位置进行优化分配，减少学生通勤动线。
+## 重启主服务
 
-### 4. 校园墙模块 — 刘烨
-覆盖**学生端、教师端、管理端**三类角色：
-- 学生端：发布、浏览校园动态帖子
-- 教师端：发布、浏览校园动态帖子
-- 管理端：违规帖子人工删除；智能分析舆论趋势，重大舆情自动告警
+SSH 登录服务器后执行：
 
-## 二、非功能要求
-所有管理端微服务需预留 **MCP 接口**，为后续对接智能Agent预留扩展能力。
-> 注：该部分由本人负责开发维护。
+```bash
+# 1. 停止旧进程
+pkill -f 'python3 app.py'
 
+# 2. 启动服务
+cd /root/MIS2/backend
+DB_HOST=127.0.0.1 FRONTEND_DIR=/root/MIS2/frontend nohup python3 app.py > /root/MIS2/app.log 2>&1 &
+
+# 3. 验证是否启动成功
+sleep 2 && curl -s http://127.0.0.1:5001/api/health
+```
+
+返回 `{"status":"ok",...}` 即表示启动成功。
+
+## 更新代码后重启
+
+在本地修改代码后，执行以下步骤：
+
+```bash
+# 1. 本地打包
+cd /Users/aoxiang/Desktop/校园MIS/MIS2
+tar czf /tmp/mis2.tar.gz Dockerfile .dockerignore backend/app.py backend/requirements.txt frontend/index.html
+
+# 2. 上传到服务器
+scp /tmp/mis2.tar.gz root@47.93.226.110:/root/mis2.tar.gz
+
+# 3. SSH 登录服务器
+ssh root@47.93.226.110
+
+# 4. 解压并重启
+cd /root
+rm -rf MIS2 && mkdir MIS2 && tar xzf mis2.tar.gz -C MIS2
+pkill -f 'python3 app.py'
+cd /root/MIS2/backend
+DB_HOST=127.0.0.1 FRONTEND_DIR=/root/MIS2/frontend nohup python3 app.py > /root/MIS2/app.log 2>&1 &
+```
+
+## 查看日志
+
+```bash
+tail -f /root/MIS2/app.log
+```
+
+## 检查服务状态
+
+```bash
+# 查看进程
+ps aux | grep app.py
+
+# 健康检查
+curl http://127.0.0.1:5001/api/health
+```

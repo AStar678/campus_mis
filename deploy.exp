@@ -1,0 +1,18 @@
+#!/usr/bin/expect -f
+set timeout 120
+spawn ssh -o StrictHostKeyChecking=no root@47.93.226.110
+expect "*assword*"
+send "yK9\$mW7#pL2@\r"
+expect "*:~#*"
+send "python3 --version && pip3 --version\r"
+expect "*:~#*"
+send "cd /root/MIS2/backend && pip3 install flask flask-cors flask-sqlalchemy pymysql pyjwt 2>&1 | tail -5\r"
+expect -timeout 120 "*#*"
+send "pkill -f 'python3 app.py' 2>/dev/null; sleep 1\r"
+expect "*#*"
+send "cd /root/MIS2/backend && DB_HOST=127.0.0.1 FRONTEND_DIR=/root/MIS2/frontend nohup python3 app.py > /root/MIS2/app.log 2>&1 &\r"
+expect "*#*"
+send "sleep 2 && curl -s http://127.0.0.1:5001/api/health\r"
+expect "*#*"
+send "exit\r"
+expect eof
