@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>身份核验中...</title></head>
+<body>
+    <div style="text-align:center; padding-top:20vh; font-family:sans-serif; color:#666;">
+        正在与主系统同步凭证，准备进入专属控制台...
+    </div>
+    <script>
+        // 抓取 Token
+        const params = new URLSearchParams(window.location.search);
+        const token = params.get('token') || localStorage.getItem('classroom_token');
+        
+        if(!token) {
+            alert('凭证丢失，请从系统大厅重新进入');
+            window.location.href = 'http://127.0.0.1:5001/';
+        } else {
+            localStorage.setItem('classroom_token', token);
+            
+            // 查验角色身份并分配路由
+            fetch(`/api/classroom/user-info?token=${token}`)
+                .then(res => res.json())
+                .then(data => {
+                    if(data.success) {
+                        // 核心：基于身份分配到独立的物理 HTML 文件
+                        const role = data.data.user_type;
+                        window.location.replace(`/${role}.html?token=${token}`);
+                    } else {
+                        window.location.href = 'http://127.0.0.1:5001/';
+                    }
+                }).catch(() => {
+                    document.body.innerHTML = '<div style="text-align:center;color:red;padding-top:20vh;">服务连接失败</div>';
+                });
+        }
+    </script>
+</body>
+</html>

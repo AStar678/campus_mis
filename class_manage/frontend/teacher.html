@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>教师控制台 - 课程与成绩管理</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        :root { --primary: #1a73e8; --primary-hover: #1557b0; --bg: #f0f2f5; --text: #333; --border: #e0e0e0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 20px; color: var(--text); }
+        .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        
+        /* 基础卡片与按钮 */
+        .card { background: white; padding: 24px; border-radius: 12px; margin-bottom: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.04); }
+        .card h3 { margin-top: 0; color: var(--primary); border-left: 4px solid var(--primary); padding-left: 12px; font-size: 18px; }
+        .btn { background: var(--primary); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s; }
+        .btn:hover { background: var(--primary-hover); }
+        .btn-outline { background: white; color: #5f6368; border: 1px solid #dadce0; }
+        .btn-outline:hover { background: #f8f9fa; }
+
+        /* 课程网格 */
+        .course-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+        .course-card { background: white; border-radius: 12px; padding: 24px; border: 1px solid var(--border); cursor: pointer; transition: all 0.2s; }
+        .course-card:hover { border-color: var(--primary); box-shadow: 0 6px 16px rgba(26,115,232,0.1); transform: translateY(-2px); }
+        .course-card h3 { border: none; padding: 0; margin: 0 0 8px 0; color: #202124; font-size: 20px; }
+
+        /* 选项卡 */
+        .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 24px; gap: 8px; }
+        .tab { padding: 12px 24px; cursor: pointer; border-bottom: 3px solid transparent; font-weight: 500; color: #5f6368; transition: all 0.2s; }
+        .tab:hover { color: var(--primary); background: #f8f9fa; border-radius: 6px 6px 0 0; }
+        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+        /* ================= 现代化数据表格排版 ================= */
+        .table-wrapper { width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; background: white; }
+        .modern-table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 800px; }
+        .modern-table th, .modern-table td { padding: 14px 16px; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); text-align: center; white-space: nowrap; font-size: 14px; }
+        .modern-table th { background: #f8f9fa; font-weight: 600; color: #3c4043; position: sticky; top: 0; z-index: 10; box-shadow: 0 1px 0 var(--border); }
+        .modern-table td:last-child, .modern-table th:last-child { border-right: none; }
+        
+        /* 冻结首列 */
+        .sticky-col { position: sticky; left: 0; background: white; z-index: 11; box-shadow: 2px 0 5px rgba(0,0,0,0.04); text-align: left !important; font-weight: 500; }
+        .modern-table th.sticky-col { z-index: 12; background: #f8f9fa; }
+
+        /* 成绩状态胶囊 */
+        .score-badge { display: inline-flex; align-items: center; justify-content: center; padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer; transition: transform 0.1s; }
+        .score-badge:hover { transform: scale(1.05); }
+        .score-badge.ai { background: #f3e8fd; color: #7b1fa2; border: 1px solid #e1bee7; }
+        .score-badge.final { background: #e6f4ea; color: #137333; border: 1px solid #ceead6; }
+        .score-badge.missing { background: #f1f3f4; color: #9aa0a6; cursor: default; pointer-events: none; }
+
+        /* 表单与输入框 */
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 8px; font-weight: 500; font-size: 14px; color: #3c4043; }
+        .input-box { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-family: inherit; transition: border 0.2s; }
+        .input-box:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(26,115,232,0.1); }
+        .mini-input { width: 70px; padding: 6px; border: 1px solid #ccc; border-radius: 4px; text-align: center; }
+
+        /* 分栏批改弹窗 */
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(2px); }
+        .modal { background: white; width: 900px; max-width: 95vw; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 38px rgba(0,0,0,0.14); }
+        .modal-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .modal-header h3 { margin: 0; color: var(--primary); }
+        .modal-body { display: flex; height: 500px; }
+        .modal-left { flex: 6; padding: 20px; border-right: 1px solid var(--border); overflow-y: auto; background: #f8f9fa; }
+        .modal-right { flex: 4; padding: 20px; display: flex; flex-direction: column; background: white; }
+        .code-preview { font-family: 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.5; white-space: pre-wrap; color: #202124; }
+        
+        .toast { position: fixed; top: 24px; left: 50%; transform: translateX(-50%); background: #323232; color: white; padding: 12px 24px; border-radius: 8px; z-index: 9999; font-weight: 500; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="toast" v-if="toastMsg">{{ toastMsg }}</div>
+
+        <div class="header-bar">
+            <h2 style="margin: 0; color: #202124;">👨‍🏫 教师教学控制台</h2>
+            <button class="btn btn-outline" @click="exitClass">退出应用</button>
+        </div>
+
+        <div v-if="currentView === 'courseList'">
+            <div class="course-grid">
+                <div class="course-card" v-for="c in courses" :key="c.id" @click="enterCourse(c)">
+                    <h3>{{ c.name }}</h3>
+                    <p style="color: #5f6368; font-size: 14px; line-height: 1.5;">进入班级进行考评、批改作业及发布教学通知。</p>
+                </div>
+            </div>
+            <p v-if="courses.length === 0" style="color: #80868b; text-align: center; margin-top: 40px;">暂无授课数据，请联系教务管理员排课。</p>
+        </div>
+
+        <div v-if="currentView === 'courseManage'">
+            <div style="display: flex; align-items: center; margin-bottom: 24px;">
+                <button class="btn btn-outline" style="margin-right: 16px;" @click="currentView = 'courseList'">← 返回</button>
+                <h2 style="margin: 0; color: #202124;">{{ activeCourse.name }}</h2>
+            </div>
+
+            <div class="tabs">
+                <div class="tab" :class="{ active: activeTab === 'gradebook' }" @click="activeTab = 'gradebook'">成绩总表 (Gradebook)</div>
+                <div class="tab" :class="{ active: activeTab === 'publish_hw' }" @click="activeTab = 'publish_hw'">发布作业任务</div>
+                <div class="tab" :class="{ active: activeTab === 'publish_ann' }" @click="activeTab = 'publish_ann'">发布课堂公告</div>
+            </div>
+
+            <div v-if="activeTab === 'gradebook'">
+                <div class="table-wrapper">
+                    <table class="modern-table">
+                        <thead>
+                            <tr>
+                                <th class="sticky-col" style="width: 120px;">学生学号</th>
+                                <th v-for="hw in homeworks" :key="hw.id" style="min-width: 140px;">
+                                    {{ hw.title }}<br>
+                                    <span style="font-size: 12px; color: #80868b; font-weight: normal;">(满分 100)</span>
+                                </th>
+                                <th style="min-width: 160px; background: #e8f0fe; color: #1a73e8;">🎯 期末总评</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="stu in students" :key="stu.student_id">
+                                <td class="sticky-col">{{ stu.student_id }}</td>
+                                
+                                <td v-for="hw in homeworks" :key="hw.id">
+                                    <template v-if="getGrade(stu.student_id, hw.id)">
+                                        <div class="score-badge ai" v-if="getGrade(stu.student_id, hw.id).is_ai" @click="openGradingModal(stu.student_id, hw.id)" title="点击进行人工复核">
+                                            🤖 AI: {{ getGrade(stu.student_id, hw.id).score }}
+                                        </div>
+                                        <div class="score-badge final" v-else @click="openGradingModal(stu.student_id, hw.id)" title="点击修改成绩">
+                                            ✅ {{ getGrade(stu.student_id, hw.id).score }}
+                                        </div>
+                                    </template>
+                                    <div class="score-badge missing" v-else>未交</div>
+                                </td>
+                                
+                                <td style="background: #f8f9fa;">
+                                    <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                        <input type="number" class="mini-input" v-model="stu.edit_final" :placeholder="stu.final_grade || '-'">
+                                        <button class="btn" style="padding: 6px 10px; font-size: 12px;" @click="saveFinalGrade(stu)">录入</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card" v-if="activeTab === 'publish_hw'">
+                <div style="max-width: 600px;">
+                    <div class="form-group">
+                        <label>作业标题</label>
+                        <input type="text" v-model="publishForm.title" class="input-box" placeholder="例如：Lab 1 - 神经网络基础">
+                    </div>
+                    <div class="form-group">
+                        <label>作业要求与规范</label>
+                        <textarea rows="5" v-model="publishForm.description" class="input-box" placeholder="在此说明代码结构要求、提交附件格式等..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>截止提交时间 (DDL)</label>
+                        <input type="datetime-local" v-model="publishForm.deadline" class="input-box">
+                    </div>
+                    <button class="btn" style="font-size: 15px; padding: 12px 32px;" @click="publishHomework">发布作业</button>
+                </div>
+            </div>
+
+            <div class="card" v-if="activeTab === 'publish_ann'">
+                <div style="max-width: 600px;">
+                    <div class="form-group">
+                        <label>公告标题</label>
+                        <input type="text" v-model="announcementForm.title" class="input-box" placeholder="例如：期中考试考场安排">
+                    </div>
+                    <div class="form-group">
+                        <label>公告正文内容</label>
+                        <textarea rows="5" v-model="announcementForm.content" class="input-box" placeholder="请输入通知详细内容，支持学生端置顶显示..."></textarea>
+                    </div>
+                    <button class="btn" style="font-size: 15px; padding: 12px 32px;" @click="publishAnnouncement">全班广播</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-overlay" v-if="showModal">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3>批改流水线 (ID: {{ currentSubmission.sub_id }})</h3>
+                    <button class="btn-outline" style="border:none; font-size:20px; padding:0 8px;" @click="showModal = false">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="modal-left">
+                        <div style="font-size: 12px; color: #5f6368; margin-bottom: 8px; font-weight: bold;">[ 学生实验提交/代码内容 ]</div>
+                        <div class="code-preview">{{ currentSubmission.content }}</div>
+                    </div>
+                    <div class="modal-right">
+                        <div style="flex: 1;">
+                            <div style="font-size: 12px; font-weight: bold; color: #7b1fa2; margin-bottom: 8px;">✨ 自动助教 (AI) 诊断结果</div>
+                            <div style="background: #f3e5f5; padding: 16px; border-radius: 8px; border-left: 4px solid #ab47bc; font-size: 14px; line-height: 1.6; color: #4a148c;">
+                                {{ currentSubmission.ai_comment }}
+                            </div>
+                        </div>
+
+                        <div style="margin-top: auto; border-top: 1px solid var(--border); padding-top: 20px;">
+                            <div class="form-group" style="margin-bottom: 12px;">
+                                <label style="font-size: 15px;">教师最终裁定分数 (100分制)</label>
+                                <input type="number" v-model="gradingScore" class="input-box" style="font-size: 20px; font-weight: bold; color: var(--primary);">
+                            </div>
+                            <button class="btn" style="width: 100%; padding: 12px; font-size: 16px;" @click="submitGrade">确认成绩并归档</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+        const token = new URLSearchParams(window.location.search).get('token') || localStorage.getItem('classroom_token');
+
+        createApp({
+            data() {
+                return {
+                    toastMsg: '',
+                    currentView: 'courseList',
+                    activeTab: 'gradebook', 
+                    courses: [], activeCourse: null,
+                    students: [], homeworks: [], gradesMap: {},
+                    
+                    // 批改弹窗
+                    showModal: false, currentSubmission: null, gradingScore: '',
+                    
+                    // 表单数据
+                    publishForm: { title: '', description: '', deadline: '' },
+                    announcementForm: { title: '', content: '' }
+                }
+            },
+            mounted() { this.loadCourses(); },
+            methods: {
+                showToast(msg) {
+                    this.toastMsg = msg;
+                    setTimeout(() => { this.toastMsg = ''; }, 3000);
+                },
+                async loadCourses() {
+                    const res = await fetch('/api/classroom/teacher/my-courses', { headers: { 'Authorization': `Bearer ${token}` } });
+                    const data = await res.json();
+                    if(data.success) this.courses = data.data;
+                },
+                async enterCourse(c) {
+                    this.activeCourse = c;
+                    this.activeTab = 'gradebook';
+                    await this.refreshDashboard();
+                },
+                async refreshDashboard() {
+                    const res = await fetch(`/api/classroom/teacher/course/${this.activeCourse.id}/dashboard`, { headers: { 'Authorization': `Bearer ${token}` } });
+                    const data = await res.json();
+                    if(data.success) {
+                        this.students = data.data.students.map(s => ({...s, edit_final: s.final_grade}));
+                        this.homeworks = data.data.homeworks;
+                        this.gradesMap = data.data.grades;
+                        this.currentView = 'courseManage';
+                    }
+                },
+                // --- 批改逻辑 ---
+                getGrade(studentId, hwId) {
+                    return this.gradesMap[studentId] ? this.gradesMap[studentId][hwId] : null;
+                },
+                openGradingModal(studentId, hwId) {
+                    const sub = this.getGrade(studentId, hwId);
+                    this.currentSubmission = sub;
+                    this.gradingScore = sub.score;
+                    this.showModal = true;
+                },
+                async submitGrade() {
+                    if (this.gradingScore === '' || this.gradingScore < 0) return this.showToast('请输入有效分数');
+                    await fetch('/api/classroom/teacher/grade-submission', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        body: JSON.stringify({ submission_id: this.currentSubmission.sub_id, score: parseFloat(this.gradingScore) })
+                    });
+                    this.showToast('✅ 批改记录已归档');
+                    this.showModal = false;
+                    this.refreshDashboard();
+                },
+                async saveFinalGrade(stu) {
+                    if (stu.edit_final === '' || stu.edit_final === null) return this.showToast('分数不能为空');
+                    await fetch('/api/classroom/teacher/grade-final', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        body: JSON.stringify({ course_id: this.activeCourse.id, student_id: stu.student_id, final_grade: parseFloat(stu.edit_final) })
+                    });
+                    this.showToast('✅ 期末总评已更新');
+                },
+                // --- 发布作业 ---
+                async publishHomework() {
+                    if (!this.publishForm.title || !this.publishForm.deadline) return this.showToast('标题和时间为必填项');
+                    const formattedDeadline = this.publishForm.deadline.replace('T', ' ') + ':00';
+                    
+                    try {
+                        const res = await fetch('/api/classroom/homework', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                            body: JSON.stringify({
+                                course_id: this.activeCourse.id,
+                                title: this.publishForm.title,
+                                description: this.publishForm.description,
+                                deadline: formattedDeadline
+                            })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            this.showToast('✅ 作业已发布至学生看板');
+                            this.publishForm = { title: '', description: '', deadline: '' };
+                            this.refreshDashboard();
+                            this.activeTab = 'gradebook';
+                        }
+                    } catch(e) { this.showToast('网络请求失败'); }
+                },
+                // --- 发布公告 ---
+                async publishAnnouncement() {
+                    if (!this.announcementForm.title || !this.announcementForm.content) return this.showToast('请完整填写通知内容');
+                    try {
+                        const res = await fetch('/api/classroom/announcement', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                            body: JSON.stringify({
+                                course_id: this.activeCourse.id,
+                                title: this.announcementForm.title,
+                                content: this.announcementForm.content
+                            })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            this.showToast('✅ 课堂广播已发送！');
+                            this.announcementForm = { title: '', content: '' };
+                        }
+                    } catch(e) { this.showToast('网络请求失败'); }
+                },
+                exitClass() { window.location.href = `http://${window.location.hostname}:5001/`; }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

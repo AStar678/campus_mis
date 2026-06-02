@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>学生控制台 - 课堂空间</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        body { font-family: -apple-system, sans-serif; background: #f0f2f5; margin: 0; padding: 20px; color: #333; }
+        .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .card { background: white; padding: 24px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .card h3 { margin-top: 0; color: #1a73e8; border-left: 4px solid #1a73e8; padding-left: 10px; }
+        
+        /* 导航与按钮 */
+        .btn { background: #1a73e8; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; transition: 0.2s; }
+        .btn:hover { background: #1557b0; }
+        .btn-outline { background: white; color: #5f6368; border: 1px solid #dadce0; }
+        .btn-outline:hover { background: #f8f9fa; }
+        
+        /* 课程网格 */
+        .course-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+        .course-card { background: white; border-radius: 8px; padding: 20px; border: 1px solid #e0e0e0; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+        .course-card:hover { transform: translateY(-4px); box-shadow: 0 6px 16px rgba(0,0,0,0.1); border-color: #1a73e8; }
+        .course-card h4 { margin: 0 0 10px 0; font-size: 18px; color: #202124; }
+        .course-card p { margin: 0; font-size: 13px; color: #5f6368; line-height: 1.5; }
+
+        /* 列表样式 (通知与作业) */
+        .list-item { padding: 16px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+        .list-item:last-child { border-bottom: none; }
+        .item-title { font-weight: 500; font-size: 15px; margin-bottom: 6px; }
+        .item-meta { font-size: 12px; color: #80868b; }
+        .badge { background: #e8f0fe; color: #1a73e8; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .badge-danger { background: #fce8e6; color: #c5221f; }
+
+        /* 表单样式 */
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; margin-bottom: 8px; font-weight: 500; font-size: 14px; }
+        .input-box { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; font-family: inherit; resize: vertical; }
+        .input-box:focus { border-color: #1a73e8; outline: none; }
+        .file-upload-box { border: 2px dashed #dadce0; padding: 20px; text-align: center; border-radius: 8px; background: #fafafa; margin-top: 10px; }
+        
+        .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 10px 20px; border-radius: 4px; z-index: 1000; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="toast" v-if="toastMsg">{{ toastMsg }}</div>
+
+        <div class="header-bar">
+            <h2>🧑‍🎓 课堂空间 - 学生端</h2>
+            <button class="btn btn-outline" @click="goBackToMain">退出课堂</button>
+        </div>
+
+        <div v-if="currentView === 'courseList'">
+            <div class="card" style="background: transparent; box-shadow: none; border: none; padding: 0;">
+                <h3 style="border-left: none; padding-left: 0; color: #333;">我的课程</h3>
+                <div class="course-grid">
+                    <div class="course-card" v-for="course in courses" :key="course.id" @click="enterCourse(course)">
+                        <h4>{{ course.name }}</h4>
+                        <p>{{ course.description || '暂无课程简介' }}</p>
+                    </div>
+                </div>
+                <p v-if="courses.length === 0" style="color: #666;">您当前尚未加入任何课程。</p>
+            </div>
+        </div>
+
+        <div v-if="currentView === 'courseDetail'">
+            <button class="btn btn-outline" style="margin-bottom: 20px;" @click="currentView = 'courseList'">← 返回课程列表</button>
+            <h2 style="margin-bottom: 20px;">{{ activeCourse.name }}</h2>
+
+            <div class="card">
+                <h3>📌 课堂公告</h3>
+                <div v-if="announcements.length > 0">
+                    <div class="list-item" v-for="ann in announcements" :key="ann.id">
+                        <div>
+                            <div class="item-title">{{ ann.title }}</div>
+                            <div class="item-meta">{{ ann.content }}</div>
+                        </div>
+                        <div class="item-meta">{{ ann.created_at }}</div>
+                    </div>
+                </div>
+                <p v-else style="color: #888; font-size: 14px;">暂无公告</p>
+            </div>
+
+            <div class="card">
+                <h3>📝 课程作业与 DDL</h3>
+                <div v-if="homeworks.length > 0">
+                    <div class="list-item" v-for="hw in homeworks" :key="hw.id">
+                        <div>
+                            <div class="item-title">{{ hw.title }}</div>
+                            <div class="item-meta">截止时间：{{ hw.deadline }}</div>
+                        </div>
+                        <div>
+                            <span class="badge badge-danger" style="margin-right: 15px;">剩 {{ hw.days_left }} 天</span>
+                            <button class="btn" @click="openHomework(hw)">查看并提交</button>
+                        </div>
+                    </div>
+                </div>
+                <p v-else style="color: #888; font-size: 14px;">当前没有需要提交的作业</p>
+            </div>
+        </div>
+
+        <div v-if="currentView === 'homeworkDetail'">
+            <button class="btn btn-outline" style="margin-bottom: 20px;" @click="currentView = 'courseDetail'">← 返回课程详情</button>
+            
+            <div class="card">
+                <h3>{{ activeHomework.title }}</h3>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 4px; margin: 15px 0; font-size: 14px; line-height: 1.6;">
+                    <strong>作业要求：</strong><br>
+                    {{ activeHomework.description }}
+                </div>
+                <div style="color: #c5221f; font-weight: bold; font-size: 14px; margin-bottom: 20px;">
+                    截止时间：{{ activeHomework.deadline }}
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>在线提交成果</h3>
+                <div class="form-group">
+                    <label>文字解答 / 核心代码片段 (选填)</label>
+                    <textarea rows="6" v-model="submitForm.content" class="input-box" placeholder="在此处输入简要说明或粘贴关键代码..."></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label>附件上传 (支持 PDF, Python, C++, Java, Zip 等)</label>
+                    <div class="file-upload-box">
+                        <input type="file" id="fileInput" @change="handleFileUpload" accept=".pdf,.py,.cpp,.java,.zip,.rar,.txt" style="display: none;">
+                        <button class="btn btn-outline" onclick="document.getElementById('fileInput').click()">选择文件</button>
+                        <p style="margin-top: 10px; font-size: 13px; color: #5f6368;">
+                            {{ submitForm.file ? '已选择文件: ' + submitForm.file.name : '未选择任何文件' }}
+                        </p>
+                    </div>
+                </div>
+
+                <button class="btn" style="width: 100%; padding: 12px; font-size: 16px;" @click="submitWork">立即提交</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+        const token = new URLSearchParams(window.location.search).get('token') || localStorage.getItem('classroom_token');
+
+        createApp({
+            data() {
+                return {
+                    toastMsg: '',
+                    currentView: 'courseList', // 'courseList', 'courseDetail', 'homeworkDetail'
+                    courses: [],
+                    activeCourse: null,
+                    announcements: [],
+                    homeworks: [],
+                    activeHomework: null,
+                    submitForm: {
+                        content: '',
+                        file: null
+                    }
+                }
+            },
+            mounted() {
+                this.loadCourses();
+            },
+            methods: {
+                showToast(msg) {
+                    this.toastMsg = msg;
+                    setTimeout(() => { this.toastMsg = ''; }, 3000);
+                },
+                // 1. 获取我的所有课程
+                async loadCourses() {
+                    try {
+                        const res = await fetch('/api/classroom/my-courses', { headers: { 'Authorization': `Bearer ${token}` } });
+                        const data = await res.json();
+                        if (data.success) this.courses = data.data;
+                    } catch (e) { this.showToast('获取课程列表失败'); }
+                },
+                // 2. 进入特定课程，加载该课程的通知和作业
+                async enterCourse(course) {
+                    this.activeCourse = course;
+                    try {
+                        const res = await fetch(`/api/classroom/course/${course.id}/details`, { headers: { 'Authorization': `Bearer ${token}` } });
+                        const data = await res.json();
+                        if (data.success) {
+                            this.announcements = data.data.announcements;
+                            this.homeworks = data.data.homeworks;
+                            this.currentView = 'courseDetail';
+                        }
+                    } catch (e) { this.showToast('加载课程详情失败'); }
+                },
+                // 3. 打开具体作业进行提交
+                openHomework(hw) {
+                    this.activeHomework = hw;
+                    this.submitForm = { content: '', file: null }; // 重置表单
+                    this.currentView = 'homeworkDetail';
+                },
+                // 处理文件选择
+                handleFileUpload(event) {
+                    const file = event.target.files[0];
+                    if (file) {
+                        this.submitForm.file = file;
+                    }
+                },
+                // 4. 提交作业（使用 FormData 支持文件上传）
+                async submitWork() {
+                    if (!this.submitForm.content && !this.submitForm.file) {
+                        this.showToast('文字内容和附件不能同时为空');
+                        return;
+                    }
+
+                    const formData = new FormData();
+                    formData.append('homework_id', this.activeHomework.id);
+                    formData.append('content', this.submitForm.content);
+                    if (this.submitForm.file) {
+                        formData.append('file', this.submitForm.file);
+                    }
+
+                    this.showToast('正在上传并评估中...');
+                    try {
+                        const res = await fetch('/api/classroom/submit-file', {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${token}` }, // FormData 不需要设置 Content-Type，浏览器会自动设置 boundary
+                            body: formData
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            alert(`提交成功！\n系统已记录您的提交。\nAI预判反馈：${data.ai_score ? data.ai_score + ' 分' : '暂无评判'}`);
+                            this.currentView = 'courseDetail'; // 提交成功后退回课程页
+                        } else {
+                            this.showToast(data.message || '提交失败');
+                        }
+                    } catch (e) { this.showToast('文件上传或网络错误'); }
+                },
+                goBackToMain() {
+                    const host = window.location.hostname;
+                    window.location.href = `http://${host}:5001/`;
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
