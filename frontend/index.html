@@ -3,262 +3,853 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>校园MIS系统</title>
+    <title>校园MIS课堂教学系统</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; min-height: 100vh; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            min-height: 100vh;
+            background: #eef1f5;
+            color: #1f2933;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+        }
+        button, input, select, textarea { font: inherit; }
+        button { cursor: pointer; border: 0; }
+        textarea { resize: vertical; min-height: 88px; }
 
-        /* 登录页 */
-        .login-container {
-            display: flex; justify-content: center; align-items: center; min-height: 100vh;
+        .login-page {
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+            background:
+                linear-gradient(rgba(20, 42, 66, .65), rgba(20, 42, 66, .65)),
+                url("https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=1800&q=80") center/cover;
         }
         .login-box {
-            background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-            width: 380px;
+            width: min(420px, 100%);
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 24px 70px rgba(0, 0, 0, .2);
+            padding: 32px;
         }
-        .login-box h1 { text-align: center; margin-bottom: 30px; color: #1a73e8; font-size: 24px; }
-        .form-group { margin-bottom: 20px; }
-        .form-group label { display: block; margin-bottom: 6px; color: #333; font-size: 14px; }
-        .form-group input, .form-group select {
-            width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px;
-            font-size: 14px; transition: border-color 0.3s;
+        .login-box h1 { font-size: 24px; margin-bottom: 8px; }
+        .login-box p { color: #617080; margin-bottom: 24px; line-height: 1.6; }
+        .field { display: grid; gap: 6px; margin-bottom: 14px; }
+        .field label { color: #52616f; font-size: 13px; }
+        .field input, .field select, .field textarea {
+            width: 100%;
+            border: 1px solid #cfd7df;
+            border-radius: 6px;
+            padding: 10px 12px;
+            background: #fff;
+            color: #1f2933;
         }
-        .form-group input:focus, .form-group select:focus { outline: none; border-color: #1a73e8; }
-        .login-btn {
-            width: 100%; padding: 12px; background: #1a73e8; color: white; border: none;
-            border-radius: 6px; font-size: 16px; cursor: pointer; transition: background 0.3s;
+        .field input:focus, .field select:focus, .field textarea:focus {
+            outline: 2px solid #9cc7ff;
+            border-color: #2f80ed;
         }
-        .login-btn:hover { background: #1557b0; }
-        .login-btn:disabled { background: #ccc; cursor: not-allowed; }
-        .error-msg { color: #e53935; font-size: 13px; margin-top: 10px; text-align: center; }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            min-height: 36px;
+            border-radius: 6px;
+            padding: 8px 14px;
+            color: #fff;
+            background: #2364aa;
+        }
+        .btn:hover { background: #174f8c; }
+        .btn:disabled { background: #a8b3bf; cursor: not-allowed; }
+        .btn.secondary { color: #1f2933; background: #e7ecf1; }
+        .btn.secondary:hover { background: #d6dee7; }
+        .btn.danger { background: #c2413a; }
+        .btn.danger:hover { background: #a6332d; }
+        .btn.success { background: #2f855a; }
+        .btn.success:hover { background: #276749; }
+        .btn.full { width: 100%; }
+        .error { color: #c2413a; font-size: 13px; margin-top: 10px; text-align: center; }
 
-        /* 大厅页 */
-        .dashboard { min-height: 100vh; }
+        .app-shell { min-height: 100vh; display: grid; grid-template-rows: auto 1fr; }
         .top-bar {
-            background: white; padding: 16px 30px; display: flex; justify-content: space-between;
-            align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            align-items: center;
+            padding: 14px 24px;
+            background: #fff;
+            border-bottom: 1px solid #dce3ea;
         }
-        .top-bar .user-info { font-size: 14px; color: #555; }
-        .top-bar .user-info span { color: #1a73e8; font-weight: 600; }
-        .logout-btn {
-            padding: 8px 16px; background: #e53935; color: white; border: none;
-            border-radius: 4px; cursor: pointer; font-size: 13px;
+        .brand { display: flex; flex-direction: column; gap: 2px; }
+        .brand strong { font-size: 18px; }
+        .brand span, .user-chip { color: #617080; font-size: 13px; }
+        .top-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+        .workspace {
+            width: min(1240px, 100%);
+            margin: 0 auto;
+            padding: 24px;
+            display: grid;
+            gap: 18px;
         }
-        .logout-btn:hover { background: #c62828; }
-        .dashboard-content { padding: 40px 30px; max-width: 1000px; margin: 0 auto; }
-        .dashboard-content h2 { margin-bottom: 30px; color: #333; }
-        .service-grid {
-            display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 20px;
+        .role-tabs {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 2px;
         }
-        .service-btn {
-            padding: 30px 20px; background: white; border: 1px solid #e0e0e0; border-radius: 10px;
-            text-align: center; cursor: pointer; transition: all 0.3s; font-size: 15px; color: #333;
+        .tab {
+            flex: 0 0 auto;
+            color: #334e68;
+            background: #dbe5ee;
+            padding: 8px 14px;
+            border-radius: 6px;
         }
-        .service-btn:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-2px); border-color: #1a73e8; }
-        .service-btn .icon { font-size: 32px; margin-bottom: 10px; }
-
-        /* 提示弹窗 */
+        .tab.active { color: #fff; background: #2364aa; }
+        .layout {
+            display: grid;
+            grid-template-columns: minmax(240px, 320px) 1fr;
+            gap: 18px;
+            align-items: start;
+        }
+        .panel, .card {
+            background: #fff;
+            border: 1px solid #dce3ea;
+            border-radius: 8px;
+        }
+        .panel { padding: 18px; }
+        .panel h2 { font-size: 18px; margin-bottom: 14px; }
+        .panel h3 { font-size: 15px; margin: 18px 0 10px; }
+        .course-list { display: grid; gap: 10px; }
+        .course-item {
+            width: 100%;
+            text-align: left;
+            color: #263849;
+            background: #f7f9fb;
+            border: 1px solid #dce3ea;
+            border-radius: 6px;
+            padding: 12px;
+        }
+        .course-item.active { border-color: #2364aa; background: #edf5ff; }
+        .course-item strong { display: block; margin-bottom: 4px; }
+        .muted { color: #617080; font-size: 13px; line-height: 1.5; }
+        .content-stack { display: grid; gap: 18px; }
+        .section-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .section-head h2 { font-size: 19px; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+        .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .list { display: grid; gap: 10px; }
+        .card { padding: 14px; }
+        .card-title { font-weight: 700; margin-bottom: 8px; }
+        .meta { color: #617080; font-size: 13px; margin-bottom: 8px; }
+        .empty {
+            padding: 28px;
+            color: #617080;
+            text-align: center;
+            border: 1px dashed #b9c6d3;
+            border-radius: 8px;
+            background: #f8fafc;
+        }
         .toast {
-            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
-            background: #333; color: white; padding: 12px 24px; border-radius: 6px;
-            font-size: 14px; z-index: 1000; transition: opacity 0.3s;
+            position: fixed;
+            top: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 50;
+            color: #fff;
+            background: #1f2933;
+            padding: 10px 18px;
+            border-radius: 6px;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, .22);
+        }
+        .table-wrap { overflow-x: auto; border: 1px solid #dce3ea; border-radius: 8px; }
+        table { width: 100%; border-collapse: collapse; background: #fff; min-width: 680px; }
+        th, td { padding: 10px 12px; border-bottom: 1px solid #e7ecf1; text-align: left; vertical-align: top; }
+        th { color: #52616f; background: #f7f9fb; font-size: 13px; }
+        tr:last-child td { border-bottom: 0; }
+        .score-pill {
+            display: inline-flex;
+            align-items: center;
+            min-height: 26px;
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: #e8f5ee;
+            color: #276749;
+            font-size: 13px;
+        }
+
+        @media (max-width: 860px) {
+            .top-bar { align-items: flex-start; flex-direction: column; }
+            .layout, .grid-2, .grid-3 { grid-template-columns: 1fr; }
+            .workspace { padding: 16px; }
+            .login-box { padding: 24px; }
         }
     </style>
 </head>
 <body>
-    <div id="app">
-        <!-- 提示弹窗 -->
-        <div class="toast" v-if="toast" >{{ toast }}</div>
+<div id="app">
+    <div class="toast" v-if="toast">{{ toast }}</div>
 
-        <!-- 登录页面 -->
-        <div class="login-container" v-if="!isLoggedIn">
-            <div class="login-box">
-                <h1>校园MIS系统</h1>
-                <div class="form-group">
-                    <label>用户类型</label>
-                    <select v-model="loginForm.user_type">
-                        <option value="student">学生</option>
-                        <option value="teacher">教师</option>
-                        <option value="admin">管理员</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>{{ loginForm.user_type === 'student' ? '学号' : loginForm.user_type === 'teacher' ? '工号' : '管理员账号' }}</label>
-                    <input type="text" v-model="loginForm.user_id" :placeholder="idPlaceholder" @keyup.enter="handleLogin">
-                </div>
-                <div class="form-group">
-                    <label>密码</label>
-                    <input type="password" v-model="loginForm.password" placeholder="请输入密码" @keyup.enter="handleLogin">
-                </div>
-                <button class="login-btn" @click="handleLogin" :disabled="loading">
-                    {{ loading ? '登录中...' : '登 录' }}
+    <main class="login-page" v-if="!isLoggedIn">
+        <section class="login-box">
+            <h1>校园MIS课堂教学系统</h1>
+            <p>统一入口覆盖学生端、教师端和管理端，支持作业、公告、成绩和课程管理。</p>
+            <div class="field">
+                <label>用户类型</label>
+                <select v-model="loginForm.user_type">
+                    <option value="student">学生</option>
+                    <option value="teacher">教师</option>
+                    <option value="admin">管理员</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>{{ idLabel }}</label>
+                <input type="text" v-model.trim="loginForm.user_id" :placeholder="idPlaceholder" @keyup.enter="handleLogin">
+            </div>
+            <div class="field">
+                <label>密码</label>
+                <input type="password" v-model="loginForm.password" placeholder="请输入密码" @keyup.enter="handleLogin">
+            </div>
+            <button class="btn full" @click="handleLogin" :disabled="loading">{{ loading ? '登录中...' : '登录' }}</button>
+            <div class="error" v-if="errorMsg">{{ errorMsg }}</div>
+        </section>
+    </main>
+
+    <main class="app-shell" v-else>
+        <header class="top-bar">
+            <div class="brand">
+                <strong>课堂教学系统</strong>
+                <span>{{ roleLabel }}工作台</span>
+            </div>
+            <div class="top-actions">
+                <span class="user-chip">{{ userInfo.user_id }} · {{ roleLabel }}</span>
+                <button class="btn secondary" @click="loadDashboard">刷新</button>
+                <button class="btn danger" @click="handleLogout">退出登录</button>
+            </div>
+        </header>
+
+        <section class="workspace">
+            <div class="role-tabs">
+                <button
+                    v-for="tab in currentTabs"
+                    :key="tab.key"
+                    class="tab"
+                    :class="{ active: activeTab === tab.key }"
+                    @click="activeTab = tab.key">
+                    {{ tab.label }}
                 </button>
-                <p class="error-msg" v-if="errorMsg">{{ errorMsg }}</p>
             </div>
-        </div>
 
-        <!-- 大厅页面 -->
-        <div class="dashboard" v-else>
-            <div class="top-bar">
-                <div class="user-info">
-                    欢迎，<span>{{ userInfo.user_id }}</span>
-                    （{{ roleLabel }}）
-                </div>
-                <button class="logout-btn" @click="handleLogout">退出登录</button>
-            </div>
-            <div class="dashboard-content">
-                <h2>{{ roleLabel }}服务大厅</h2>
-                <div class="service-grid">
-                    <div class="service-btn" v-for="service in currentServices" :key="service.name" @click="clickService(service)">
-                        <div class="icon">{{ service.icon }}</div>
-                        <div>{{ service.name }}</div>
+            <div class="layout" v-if="userInfo.user_type !== 'admin'">
+                <aside class="panel">
+                    <div class="section-head">
+                        <h2>我的课程</h2>
                     </div>
+                    <div class="course-list" v-if="courses.length">
+                        <button
+                            v-for="course in courses"
+                            :key="course.id"
+                            class="course-item"
+                            :class="{ active: selectedCourseId === course.id }"
+                            @click="selectCourse(course.id)">
+                            <strong>{{ course.name }}</strong>
+                            <span class="muted">{{ course.code }} · 教师 {{ course.teacher_label }}</span>
+                        </button>
+                    </div>
+                    <div class="empty" v-else>暂无课程</div>
+
+                    <h3>DDL</h3>
+                    <div class="list" v-if="ddls.length">
+                        <div class="card" v-for="item in ddls" :key="item.id">
+                            <div class="card-title">{{ item.title }}</div>
+                            <div class="muted">截止：{{ item.due_at }}</div>
+                        </div>
+                    </div>
+                    <div class="empty" v-else>暂无待办</div>
+                </aside>
+
+                <div class="content-stack">
+                    <template v-if="selectedCourse">
+                        <section class="panel" v-if="activeTab === 'announcements'">
+                            <div class="section-head">
+                                <h2>课堂公告 · {{ selectedCourse.name }}</h2>
+                            </div>
+                            <form class="grid-2" v-if="isTeacher" @submit.prevent="createAnnouncement">
+                                <div class="field">
+                                    <label>公告标题</label>
+                                    <input v-model.trim="announcementForm.title" placeholder="如：实验课安排调整">
+                                </div>
+                                <div class="field">
+                                    <label>公告内容</label>
+                                    <textarea v-model.trim="announcementForm.content" placeholder="请输入公告内容"></textarea>
+                                </div>
+                                <div class="actions">
+                                    <button class="btn" type="submit">发布公告</button>
+                                </div>
+                            </form>
+                            <div class="list">
+                                <article class="card" v-for="item in announcements" :key="item.id">
+                                    <div class="card-title">{{ item.title }}</div>
+                                    <div class="meta">{{ item.created_at }} · 发布人 {{ item.created_by }}</div>
+                                    <div>{{ item.content }}</div>
+                                </article>
+                                <div class="empty" v-if="!announcements.length">暂无公告</div>
+                            </div>
+                        </section>
+
+                        <section class="panel" v-if="activeTab === 'assignments'">
+                            <div class="section-head">
+                                <h2>作业管理 · {{ selectedCourse.name }}</h2>
+                            </div>
+                            <form class="grid-3" v-if="isTeacher" @submit.prevent="createAssignment">
+                                <div class="field">
+                                    <label>作业标题</label>
+                                    <input v-model.trim="assignmentForm.title" placeholder="如：第三章课后题">
+                                </div>
+                                <div class="field">
+                                    <label>截止时间</label>
+                                    <input type="datetime-local" v-model="assignmentForm.due_at">
+                                </div>
+                                <div class="field">
+                                    <label>作业要求</label>
+                                    <textarea v-model.trim="assignmentForm.content" placeholder="请输入提交要求"></textarea>
+                                </div>
+                                <div class="actions">
+                                    <button class="btn" type="submit">发布作业</button>
+                                </div>
+                            </form>
+                            <div class="list">
+                                <article class="card" v-for="item in assignments" :key="item.id">
+                                    <div class="section-head">
+                                        <div>
+                                            <div class="card-title">{{ item.title }}</div>
+                                            <div class="meta">截止：{{ item.due_at || '未设置' }}</div>
+                                        </div>
+                                        <button class="btn secondary" v-if="isTeacher" @click="loadSubmissions(item)">查看提交</button>
+                                    </div>
+                                    <div>{{ item.content || '无补充说明' }}</div>
+                                    <div v-if="isStudent" class="field" style="margin-top: 12px;">
+                                        <label>我的提交</label>
+                                        <textarea v-model="submissionDrafts[item.id]" :placeholder="item.submission ? '可修改后重新提交' : '请输入作业内容'"></textarea>
+                                        <div class="actions">
+                                            <button class="btn success" @click="submitAssignment(item)">提交作业</button>
+                                            <span class="score-pill" v-if="item.submission">AI {{ item.submission.ai_score }} 分</span>
+                                            <span class="score-pill" v-if="item.submission && item.submission.teacher_score !== null">教师 {{ item.submission.teacher_score }} 分</span>
+                                        </div>
+                                        <p class="muted" v-if="item.submission">{{ item.submission.ai_feedback }}</p>
+                                    </div>
+                                </article>
+                                <div class="empty" v-if="!assignments.length">暂无作业</div>
+                            </div>
+                        </section>
+
+                        <section class="panel" v-if="isTeacher && activeTab === 'submissions'">
+                            <div class="section-head">
+                                <h2>AI批改与教师复核</h2>
+                                <span class="muted">{{ currentAssignmentTitle }}</span>
+                            </div>
+                            <div class="table-wrap" v-if="submissions.length">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>学生</th>
+                                            <th>提交内容</th>
+                                            <th>AI初评</th>
+                                            <th>教师评分</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="sub in submissions" :key="sub.id">
+                                            <td>{{ sub.student_id }}<br><span class="muted">{{ sub.submitted_at }}</span></td>
+                                            <td>{{ sub.content }}</td>
+                                            <td><span class="score-pill" v-if="sub.ai_score !== null">{{ sub.ai_score }} 分</span><br><span class="muted">{{ sub.ai_feedback }}</span></td>
+                                            <td>
+                                                <input style="width: 88px;" v-model="gradeDrafts[sub.id].teacher_score" placeholder="分数">
+                                                <textarea style="margin-top: 8px;" v-model="gradeDrafts[sub.id].teacher_feedback" placeholder="教师评语"></textarea>
+                                            </td>
+                                            <td>
+                                                <div class="actions">
+                                                    <button class="btn secondary" @click="aiGrade(sub)">AI批改</button>
+                                                    <button class="btn" @click="teacherGrade(sub)">保存</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="empty" v-else>选择一份作业后查看学生提交</div>
+                        </section>
+
+                        <section class="panel" v-if="activeTab === 'grades'">
+                            <div class="section-head">
+                                <h2>成绩管理 · {{ selectedCourse.name }}</h2>
+                            </div>
+                            <form class="grid-3" v-if="isTeacher" @submit.prevent="saveCourseGrade">
+                                <div class="field">
+                                    <label>学生</label>
+                                    <select v-model="courseGradeForm.student_id">
+                                        <option value="">选择学生</option>
+                                        <option v-for="student in students" :key="student.student_id" :value="student.student_id">
+                                            {{ student.student_id }} · {{ student.major }}
+                                        </option>
+                                    </select>
+                                </div>
+                                <div class="field">
+                                    <label>成绩</label>
+                                    <input v-model="courseGradeForm.score" placeholder="0-100">
+                                </div>
+                                <div class="field">
+                                    <label>备注</label>
+                                    <input v-model.trim="courseGradeForm.comment" placeholder="可选">
+                                </div>
+                                <div class="actions">
+                                    <button class="btn" type="submit">录入成绩</button>
+                                </div>
+                            </form>
+                            <div class="table-wrap" v-if="grades.length">
+                                <table>
+                                    <thead><tr><th>学生</th><th>成绩</th><th>备注</th><th>更新时间</th></tr></thead>
+                                    <tbody>
+                                        <tr v-for="item in grades" :key="item.id">
+                                            <td>{{ item.student_id }}</td>
+                                            <td><span class="score-pill">{{ item.score }} 分</span></td>
+                                            <td>{{ item.comment || '-' }}</td>
+                                            <td>{{ item.updated_at }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="empty" v-else>暂无成绩</div>
+                        </section>
+                    </template>
+                    <div class="empty" v-else>请选择课程</div>
                 </div>
             </div>
-        </div>
-    </div>
 
-    <script>
-        const API_BASE = '';
+            <div class="content-stack" v-else>
+                <section class="panel">
+                    <div class="section-head">
+                        <h2>课程新增与分配教师</h2>
+                    </div>
+                    <form class="grid-3" @submit.prevent="createCourse">
+                        <div class="field">
+                            <label>课程编号</label>
+                            <input v-model.trim="courseForm.code" placeholder="CS101">
+                        </div>
+                        <div class="field">
+                            <label>课程名称</label>
+                            <input v-model.trim="courseForm.name" placeholder="数据库系统">
+                        </div>
+                        <div class="field">
+                            <label>授课教师</label>
+                            <select v-model="courseForm.teacher_id">
+                                <option value="">暂不分配</option>
+                                <option v-for="teacher in teachers" :key="teacher.teacher_id" :value="teacher.teacher_id">
+                                    {{ teacher.teacher_id }} · {{ teacher.college }}
+                                </option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label>面向年级</label>
+                            <input v-model.trim="courseForm.target_grade" placeholder="如 2024">
+                        </div>
+                        <div class="field">
+                            <label>面向专业</label>
+                            <input v-model.trim="courseForm.target_major" placeholder="如 软件工程">
+                        </div>
+                        <div class="field">
+                            <label>课程说明</label>
+                            <textarea v-model.trim="courseForm.description" placeholder="课程简介"></textarea>
+                        </div>
+                        <div class="actions">
+                            <button class="btn" type="submit">新增课程</button>
+                        </div>
+                    </form>
+                </section>
 
-        const { createApp } = Vue;
+                <section class="panel">
+                    <div class="section-head">
+                        <h2>课程列表</h2>
+                    </div>
+                    <div class="table-wrap" v-if="courses.length">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>课程</th>
+                                    <th>授课教师</th>
+                                    <th>面向对象</th>
+                                    <th>说明</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="course in courses" :key="course.id">
+                                    <td><strong>{{ course.name }}</strong><br><span class="muted">{{ course.code }}</span></td>
+                                    <td>
+                                        <select v-model="course.teacher_id" @change="assignTeacher(course)">
+                                            <option value="">未分配</option>
+                                            <option v-for="teacher in teachers" :key="teacher.teacher_id" :value="teacher.teacher_id">
+                                                {{ teacher.teacher_id }} · {{ teacher.title || '教师' }}
+                                            </option>
+                                        </select>
+                                    </td>
+                                    <td>{{ course.target_grade || '不限' }} · {{ course.target_major || '不限' }}</td>
+                                    <td>{{ course.description || '-' }}</td>
+                                    <td><button class="btn danger" @click="deleteCourse(course)">删除</button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="empty" v-else>暂无课程</div>
+                </section>
+            </div>
+        </section>
+    </main>
+</div>
 
-        createApp({
-            data() {
-                return {
-                    isLoggedIn: false,
-                    loading: false,
-                    errorMsg: '',
-                    toast: '',
-                    token: '',
-                    userInfo: {},
-                    loginForm: {
-                        user_id: '',
-                        password: '',
-                        user_type: 'student'
-                    },
-                    // 各端的服务按钮（port 为分服务端口，0 表示未上线）
-                    studentServices: [
-                        { name: '选课系统', icon: '📚', port: 5004 },
-                        { name: '成绩查询', icon: '📊', port: 5002 },
-                        { name: '课堂互动', icon: '🎓', port: 5003 },
-                        { name: '校园墙', icon: '💬', port: 5005 },
-                    ],
-                    teacherServices: [
-                        { name: '课程管理', icon: '📖', port: 5002 },
-                        { name: '成绩管理', icon: '✏️', port: 5002 },
-                        { name: '课堂管理', icon: '🏫', port: 5003 },
-                        { name: '校园墙', icon: '💬', port: 5005 },
-                    ],
-                    adminServices: [
-                        { name: '用户管理', icon: '👥', port: 0 },
-                        { name: '教室管理', icon: '🏢', port: 0 },
-                        { name: '服务管理', icon: '⚙️', port: 0 },
-                        { name: '数据统计', icon: '📈', port: 0 },
-                    ]
-                }
-            },
-            computed: {
-                idPlaceholder() {
-                    if (this.loginForm.user_type === 'student') return '请输入8位学号';
-                    if (this.loginForm.user_type === 'teacher') return '请输入4位工号';
-                    return '请输入管理员账号';
-                },
-                roleLabel() {
-                    const map = { student: '学生', teacher: '教师', admin: '管理员' };
-                    return map[this.userInfo.user_type] || '';
-                },
-                currentServices() {
-                    if (this.userInfo.user_type === 'student') return this.studentServices;
-                    if (this.userInfo.user_type === 'teacher') return this.teacherServices;
-                    if (this.userInfo.user_type === 'admin') return this.adminServices;
-                    return [];
-                }
-            },
-            mounted() {
-                // 检查本地存储的 token
-                const savedToken = localStorage.getItem('mis_token');
-                if (savedToken) {
-                    this.token = savedToken;
-                    this.fetchUserInfo();
-                }
-            },
-            methods: {
-                async handleLogin() {
-                    this.errorMsg = '';
-                    if (!this.loginForm.user_id || !this.loginForm.password) {
-                        this.errorMsg = '请填写完整信息';
-                        return;
-                    }
-                    this.loading = true;
-                    try {
-                        const res = await fetch(`${API_BASE}/api/login`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(this.loginForm)
-                        });
-                        const data = await res.json();
-                        if (data.success) {
-                            this.token = data.token;
-                            localStorage.setItem('mis_token', data.token);
-                            this.userInfo = { user_id: data.user_id, user_type: data.user_type };
-                            this.isLoggedIn = true;
-                            this.showToast('登录成功');
-                        } else {
-                            this.errorMsg = data.message || '登录失败';
-                        }
-                    } catch (e) {
-                        this.errorMsg = '网络错误，请确认后端服务已启动';
-                    }
-                    this.loading = false;
-                },
-                async handleLogout() {
-                    try {
-                        await fetch(`${API_BASE}/api/logout`, {
-                            method: 'POST',
-                            headers: { 'Authorization': `Bearer ${this.token}` }
-                        });
-                    } catch (e) {}
-                    this.token = '';
-                    this.userInfo = {};
-                    this.isLoggedIn = false;
-                    localStorage.removeItem('mis_token');
-                    this.showToast('已退出登录');
-                },
-                async fetchUserInfo() {
-                    try {
-                        const res = await fetch(`${API_BASE}/api/user-info`, {
-                            headers: { 'Authorization': `Bearer ${this.token}` }
-                        });
-                        const data = await res.json();
-                        if (data.success) {
-                            this.userInfo = data.data;
-                            this.isLoggedIn = true;
-                        } else {
-                            localStorage.removeItem('mis_token');
-                        }
-                    } catch (e) {
-                        localStorage.removeItem('mis_token');
-                    }
-                },
-                clickService(service) {
-                    if (!service.port) {
-                        this.showToast(`「${service.name}」服务暂未上线`);
-                        return;
-                    }
-                    // 拼接分服务地址，带上 token 参数
-                    const host = window.location.hostname;
-                    const url = `http://${host}:${service.port}?token=${this.token}`;
-                    window.open(url, '_blank');
-                },
-                showToast(msg) {
-                    this.toast = msg;
-                    setTimeout(() => { this.toast = ''; }, 2500);
-                }
+<script>
+const API_BASE = '';
+const { createApp } = Vue;
+
+createApp({
+    data() {
+        return {
+            loading: false,
+            isLoggedIn: false,
+            toast: '',
+            errorMsg: '',
+            token: '',
+            userInfo: {},
+            activeTab: 'announcements',
+            selectedCourseId: null,
+            selectedAssignmentId: null,
+            courses: [],
+            teachers: [],
+            students: [],
+            assignments: [],
+            announcements: [],
+            submissions: [],
+            grades: [],
+            ddls: [],
+            submissionDrafts: {},
+            gradeDrafts: {},
+            loginForm: { user_id: '', password: '', user_type: 'student' },
+            courseForm: { code: '', name: '', teacher_id: '', target_grade: '', target_major: '', description: '' },
+            assignmentForm: { title: '', due_at: '', content: '' },
+            announcementForm: { title: '', content: '' },
+            courseGradeForm: { student_id: '', score: '', comment: '' }
+        };
+    },
+    computed: {
+        isTeacher() { return this.userInfo.user_type === 'teacher'; },
+        isStudent() { return this.userInfo.user_type === 'student'; },
+        roleLabel() {
+            return { student: '学生', teacher: '教师', admin: '管理员' }[this.userInfo.user_type] || '';
+        },
+        idLabel() {
+            return this.loginForm.user_type === 'student' ? '学号' : this.loginForm.user_type === 'teacher' ? '工号' : '管理员账号';
+        },
+        idPlaceholder() {
+            return this.loginForm.user_type === 'student' ? '如 20240001' : this.loginForm.user_type === 'teacher' ? '如 1001' : '如 admin';
+        },
+        currentTabs() {
+            if (this.userInfo.user_type === 'teacher') {
+                return [
+                    { key: 'announcements', label: '课堂公告' },
+                    { key: 'assignments', label: '作业发布' },
+                    { key: 'submissions', label: 'AI批改' },
+                    { key: 'grades', label: '成绩录入' }
+                ];
             }
-        }).mount('#app');
-    </script>
+            if (this.userInfo.user_type === 'student') {
+                return [
+                    { key: 'announcements', label: '课堂公告' },
+                    { key: 'assignments', label: '在线提交' },
+                    { key: 'grades', label: '我的成绩' }
+                ];
+            }
+            return [{ key: 'admin', label: '课程管理' }];
+        },
+        selectedCourse() {
+            return this.courses.find(course => course.id === this.selectedCourseId);
+        },
+        currentAssignmentTitle() {
+            const item = this.assignments.find(assignment => assignment.id === this.selectedAssignmentId);
+            return item ? item.title : '尚未选择作业';
+        }
+    },
+    mounted() {
+        const savedToken = localStorage.getItem('mis_token');
+        if (savedToken) {
+            this.token = savedToken;
+            this.fetchUserInfo();
+        }
+    },
+    methods: {
+        authHeaders(extra = {}) {
+            return { ...extra, Authorization: `Bearer ${this.token}` };
+        },
+        async api(path, options = {}) {
+            const headers = options.headers || {};
+            const res = await fetch(`${API_BASE}${path}`, {
+                ...options,
+                headers: this.authHeaders(headers)
+            });
+            const data = await res.json();
+            if (!res.ok || data.success === false) {
+                throw new Error(data.message || '请求失败');
+            }
+            return data.data;
+        },
+        async handleLogin() {
+            this.errorMsg = '';
+            if (!this.loginForm.user_id || !this.loginForm.password) {
+                this.errorMsg = '请填写完整信息';
+                return;
+            }
+            this.loading = true;
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.loginForm)
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.message || '登录失败');
+                this.token = data.token;
+                localStorage.setItem('mis_token', data.token);
+                this.userInfo = { user_id: data.user_id, user_type: data.user_type };
+                this.isLoggedIn = true;
+                await this.loadDashboard();
+                this.showToast('登录成功');
+            } catch (err) {
+                this.errorMsg = err.message;
+            } finally {
+                this.loading = false;
+            }
+        },
+        async handleLogout() {
+            try {
+                await fetch('/api/logout', { method: 'POST', headers: this.authHeaders() });
+            } catch (err) {}
+            localStorage.removeItem('mis_token');
+            this.token = '';
+            this.userInfo = {};
+            this.isLoggedIn = false;
+            this.showToast('已退出登录');
+        },
+        async fetchUserInfo() {
+            try {
+                const data = await this.api('/api/user-info');
+                this.userInfo = data;
+                this.isLoggedIn = true;
+                await this.loadDashboard();
+            } catch (err) {
+                localStorage.removeItem('mis_token');
+            }
+        },
+        async loadDashboard() {
+            if (this.userInfo.user_type === 'admin') {
+                this.activeTab = 'admin';
+                await Promise.all([this.loadTeachers(), this.loadCourses()]);
+                return;
+            }
+            if (!this.currentTabs.some(tab => tab.key === this.activeTab)) {
+                this.activeTab = 'announcements';
+            }
+            await Promise.all([this.loadCourses(), this.loadDdls(), this.isTeacher ? this.loadStudents() : Promise.resolve()]);
+        },
+        async loadCourses() {
+            try {
+                this.courses = await this.api('/api/teaching/courses');
+                if (!this.selectedCourseId && this.courses.length) this.selectedCourseId = this.courses[0].id;
+                if (this.selectedCourseId) await this.loadCourseData();
+            } catch (err) {
+                this.showToast(err.message);
+            }
+        },
+        async loadTeachers() {
+            this.teachers = await this.api('/api/teaching/teachers');
+        },
+        async loadStudents() {
+            this.students = await this.api('/api/teaching/students');
+        },
+        async loadDdls() {
+            try {
+                this.ddls = await this.api('/api/teaching/ddls');
+            } catch (err) {
+                this.ddls = [];
+            }
+        },
+        async selectCourse(courseId) {
+            this.selectedCourseId = courseId;
+            this.submissions = [];
+            this.selectedAssignmentId = null;
+            await this.loadCourseData();
+        },
+        async loadCourseData() {
+            if (!this.selectedCourseId) return;
+            await Promise.all([this.loadAssignments(), this.loadAnnouncements(), this.loadGrades()]);
+        },
+        async loadAssignments() {
+            this.assignments = await this.api(`/api/teaching/courses/${this.selectedCourseId}/assignments`);
+            this.submissionDrafts = {};
+            this.assignments.forEach(item => {
+                this.submissionDrafts[item.id] = item.submission ? item.submission.content : '';
+            });
+        },
+        async loadAnnouncements() {
+            this.announcements = await this.api(`/api/teaching/courses/${this.selectedCourseId}/announcements`);
+        },
+        async loadGrades() {
+            this.grades = await this.api(`/api/teaching/courses/${this.selectedCourseId}/grades`);
+        },
+        async createCourse() {
+            try {
+                await this.api('/api/teaching/courses', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.courseForm)
+                });
+                this.courseForm = { code: '', name: '', teacher_id: '', target_grade: '', target_major: '', description: '' };
+                await this.loadCourses();
+                this.showToast('课程已新增');
+            } catch (err) {
+                this.showToast(err.message);
+            }
+        },
+        async assignTeacher(course) {
+            try {
+                await this.api(`/api/teaching/courses/${course.id}/assign-teacher`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ teacher_id: course.teacher_id })
+                });
+                this.showToast('授课教师已更新');
+            } catch (err) {
+                this.showToast(err.message);
+            }
+        },
+        async deleteCourse(course) {
+            if (!confirm(`确认删除课程「${course.name}」？`)) return;
+            try {
+                await this.api(`/api/teaching/courses/${course.id}`, { method: 'DELETE' });
+                await this.loadCourses();
+                this.showToast('课程已删除');
+            } catch (err) {
+                this.showToast(err.message);
+            }
+        },
+        async createAnnouncement() {
+            try {
+                await this.api(`/api/teaching/courses/${this.selectedCourseId}/announcements`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.announcementForm)
+                });
+                this.announcementForm = { title: '', content: '' };
+                await this.loadAnnouncements();
+                this.showToast('公告已发布');
+            } catch (err) {
+                this.showToast(err.message);
+            }
+        },
+        async createAssignment() {
+            try {
+                await this.api(`/api/teaching/courses/${this.selectedCourseId}/assignments`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.assignmentForm)
+                });
+                this.assignmentForm = { title: '', due_at: '', content: '' };
+                await Promise.all([this.loadAssignments(), this.loadDdls()]);
+                this.showToast('作业已发布');
+            } catch (err) {
+                this.showToast(err.message);
+            }
+        },
+        async submitAssignment(item) {
+            try {
+                await this.api(`/api/teaching/assignments/${item.id}/submit`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: this.submissionDrafts[item.id] })
+                });
+                await this.loadAssignments();
+                this.showToast('作业已提交，AI初评已生成');
+            } catch (err) {
+                this.showToast(err.message);
+            }
+        },
+        async loadSubmissions(item) {
+            this.selectedAssignmentId = item.id;
+            this.activeTab = 'submissions';
+            try {
+                this.submissions = await this.api(`/api/teaching/assignments/${item.id}/submissions`);
+                this.gradeDrafts = {};
+                this.submissions.forEach(sub => {
+                    this.gradeDrafts[sub.id] = {
+                        teacher_score: sub.teacher_score ?? sub.ai_score ?? '',
+                        teacher_feedback: sub.teacher_feedback || ''
+                    };
+                });
+            } catch (err) {
+                this.showToast(err.message);
+            }
+        },
+        async aiGrade(sub) {
+            try {
+                await this.api(`/api/teaching/submissions/${sub.id}/ai-grade`, { method: 'POST' });
+                const current = this.assignments.find(item => item.id === this.selectedAssignmentId);
+                if (current) await this.loadSubmissions(current);
+                this.showToast('AI批改已更新');
+            } catch (err) {
+                this.showToast(err.message);
+            }
+        },
+        async teacherGrade(sub) {
+            try {
+                await this.api(`/api/teaching/submissions/${sub.id}/teacher-grade`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.gradeDrafts[sub.id])
+                });
+                const current = this.assignments.find(item => item.id === this.selectedAssignmentId);
+                if (current) await this.loadSubmissions(current);
+                this.showToast('教师评分已保存');
+            } catch (err) {
+                this.showToast(err.message);
+            }
+        },
+        async saveCourseGrade() {
+            try {
+                await this.api(`/api/teaching/courses/${this.selectedCourseId}/grades`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.courseGradeForm)
+                });
+                this.courseGradeForm = { student_id: '', score: '', comment: '' };
+                await this.loadGrades();
+                this.showToast('课程成绩已保存');
+            } catch (err) {
+                this.showToast(err.message);
+            }
+        },
+        showToast(message) {
+            this.toast = message;
+            clearTimeout(this.toastTimer);
+            this.toastTimer = setTimeout(() => { this.toast = ''; }, 2600);
+        }
+    }
+}).mount('#app');
+</script>
 </body>
 </html>
