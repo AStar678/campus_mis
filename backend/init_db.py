@@ -1,106 +1,127 @@
 """
-数据库初始化脚本：建库建表 + 插入测试数据
-使用方法：python init_db.py
+Database initialization script.
+
+Usage:
+    python init_db.py
+
+The script creates tables for all configured SQLAlchemy binds and inserts a
+small demo dataset for the classroom teaching system.
 """
-import pymysql
-from app import app, db, Student, Teacher, Admin, Classroom, Building, BuildingAdjacency, SubService
-import hashlib
+from app import (
+    app,
+    db,
+    Admin,
+    Assignment,
+    Building,
+    BuildingAdjacency,
+    Classroom,
+    ClassroomAnnouncement,
+    Course,
+    CourseEnrollment,
+    Student,
+    SubService,
+    Teacher,
+    hash_password,
+)
 
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
-
-def create_database():
-    """删除旧库并重新创建"""
-    conn = pymysql.connect(host='localhost', user='root', password='Aoxiang050916!', charset='utf8mb4')
-    cursor = conn.cursor()
-    cursor.execute("DROP DATABASE IF EXISTS campus_mis")
-    cursor.execute("CREATE DATABASE campus_mis DEFAULT CHARACTER SET utf8mb4")
-    conn.close()
-    print("数据库 campus_mis 重建成功")
 
 def init_tables():
-    """创建所有表（先删除旧表）"""
     with app.app_context():
-        db.drop_all()
-        db.create_all()
-        print("所有表创建成功（已重建）")
+        db.create_all(bind_key=None)
+        db.create_all(bind_key='users')
+        print("Tables are ready.")
+
 
 def insert_test_data():
-    """插入测试数据"""
     with app.app_context():
-        # 检查是否已有数据
-        if Student.query.first():
-            print("数据库已有数据，跳过插入")
-            return
+        if not Student.query.filter_by(student_id='20240001').first():
+            db.session.add_all([
+                Student(student_id='20240001', password=hash_password('123456'), grade='2024', major='计算机科学'),
+                Student(student_id='20240002', password=hash_password('123456'), grade='2024', major='软件工程'),
+                Student(student_id='20230001', password=hash_password('123456'), grade='2023', major='软件工程'),
+            ])
 
-        # 测试学生
-        students = [
-            Student(student_id='20240001', password=hash_password('123456'), grade='2024', major='计算机科学'),
-            Student(student_id='20240002', password=hash_password('123456'), grade='2024', major='软件工程'),
-        ]
+        if not Teacher.query.filter_by(teacher_id='1001').first():
+            db.session.add_all([
+                Teacher(teacher_id='1001', password=hash_password('123456'), college='计算机学院', title='教授'),
+                Teacher(teacher_id='1002', password=hash_password('123456'), college='计算机学院', title='副教授'),
+            ])
 
-        # 测试教师
-        teachers = [
-            Teacher(teacher_id='1001', password=hash_password('123456'), college='计算机学院', title='教授'),
-            Teacher(teacher_id='1002', password=hash_password('123456'), college='计算机学院', title='副教授'),
-        ]
+        if not Admin.query.filter_by(admin_id='admin').first():
+            db.session.add(Admin(admin_id='admin', password=hash_password('admin123'), name='系统管理员'))
 
-        # 测试管理员
-        admins = [
-            Admin(admin_id='admin', password=hash_password('admin123'), name='系统管理员'),
-        ]
+        if not Classroom.query.filter_by(classroom_id='A101').first():
+            db.session.add_all([
+                Classroom(classroom_id='A101', building='1号楼'),
+                Classroom(classroom_id='A201', building='1号楼'),
+                Classroom(classroom_id='B101', building='2号楼'),
+            ])
 
-        # 测试教室
-        classrooms = [
-            Classroom(classroom_id='A101', building='1号楼'),
-            Classroom(classroom_id='A201', building='1号楼'),
-            Classroom(classroom_id='B101', building='2号楼'),
-        ]
+        if not Building.query.first():
+            db.session.add_all([
+                Building(building_name='1号楼'),
+                Building(building_name='2号楼'),
+                Building(building_name='图书馆'),
+                Building(building_name='食堂'),
+                Building(building_name='体育馆'),
+            ])
+            db.session.flush()
+            db.session.add_all([
+                BuildingAdjacency(building_a=1, building_b=2, distance=200.0),
+                BuildingAdjacency(building_a=1, building_b=3, distance=350.0),
+                BuildingAdjacency(building_a=2, building_b=3, distance=250.0),
+                BuildingAdjacency(building_a=1, building_b=4, distance=400.0),
+                BuildingAdjacency(building_a=2, building_b=4, distance=300.0),
+                BuildingAdjacency(building_a=3, building_b=4, distance=150.0),
+                BuildingAdjacency(building_a=4, building_b=5, distance=200.0),
+                BuildingAdjacency(building_a=3, building_b=5, distance=500.0),
+            ])
 
-        # 校园建筑
-        buildings = [
-            Building(building_name='1号楼'),
-            Building(building_name='2号楼'),
-            Building(building_name='图书馆'),
-            Building(building_name='食堂'),
-            Building(building_name='体育馆'),
-        ]
-        db.session.add_all(buildings)
-        db.session.flush()  # 获取自增 ID
+        if not SubService.query.filter_by(service_port=5003).first():
+            db.session.add_all([
+                SubService(service_name='教务服务', service_ip='127.0.0.1', service_port=5002, description='课程管理、成绩管理、学分计算'),
+                SubService(service_name='课堂教学服务', service_ip='127.0.0.1', service_port=5003, description='作业发布、课堂公告、AI批改'),
+                SubService(service_name='选课排课服务', service_ip='127.0.0.1', service_port=5004, description='学生选课、智能排课'),
+                SubService(service_name='校园墙服务', service_ip='127.0.0.1', service_port=5005, description='校园社交、动态发布'),
+            ])
 
-        # 建筑间距离（邻接表）
-        adjacency = [
-            BuildingAdjacency(building_a=1, building_b=2, distance=200.0),
-            BuildingAdjacency(building_a=1, building_b=3, distance=350.0),
-            BuildingAdjacency(building_a=2, building_b=3, distance=250.0),
-            BuildingAdjacency(building_a=1, building_b=4, distance=400.0),
-            BuildingAdjacency(building_a=2, building_b=4, distance=300.0),
-            BuildingAdjacency(building_a=3, building_b=4, distance=150.0),
-            BuildingAdjacency(building_a=4, building_b=5, distance=200.0),
-            BuildingAdjacency(building_a=3, building_b=5, distance=500.0),
-        ]
-
-        # 分服务注册信息（端口管理）
-        services = [
-            SubService(service_name='教务服务', service_ip='127.0.0.1', service_port=5002, description='课程管理、成绩管理、学分计算'),
-            SubService(service_name='课堂服务', service_ip='127.0.0.1', service_port=5003, description='作业发布、课堂公告、AI批改'),
-            SubService(service_name='选课排课服务', service_ip='127.0.0.1', service_port=5004, description='学生选课、智能排课'),
-            SubService(service_name='校园墙服务', service_ip='127.0.0.1', service_port=5005, description='校园社交、动态发布'),
-        ]
-
-        db.session.add_all(students + teachers + admins + classrooms + adjacency + services)
         db.session.commit()
-        print("测试数据插入成功")
-        print("=" * 40)
-        print("测试账号：")
-        print("  学生: 20240001 / 123456")
-        print("  学生: 20240002 / 123456")
-        print("  教师: 1001 / 123456")
-        print("  教师: 1002 / 123456")
-        print("  管理员: admin / admin123")
-        print("=" * 40)
+
+        if not Course.query.filter_by(code='CS101').first():
+            course = Course(
+                code='CS101',
+                name='数据库系统',
+                description='关系模型、SQL、事务与索引基础。',
+                teacher_id='1001',
+                target_grade='2024',
+                target_major='软件工程'
+            )
+            db.session.add(course)
+            db.session.flush()
+            db.session.add_all([
+                CourseEnrollment(course_id=course.id, student_id='20240002'),
+                ClassroomAnnouncement(
+                    course_id=course.id,
+                    title='第一次课准备',
+                    content='请提前安装数据库客户端，并阅读第一章教材。',
+                    created_by='1001'
+                ),
+                Assignment(
+                    course_id=course.id,
+                    title='SQL查询练习',
+                    content='完成三道多表查询题，提交SQL语句和执行结果说明。',
+                    created_by='1001'
+                ),
+            ])
+            db.session.commit()
+
+        print("Demo data is ready.")
+        print("Student: 20240001 / 123456")
+        print("Student: 20240002 / 123456")
+        print("Teacher: 1001 / 123456")
+        print("Admin: admin / admin123")
+
 
 if __name__ == '__main__':
-    create_database()
     init_tables()
     insert_test_data()
