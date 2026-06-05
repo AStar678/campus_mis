@@ -1,6 +1,6 @@
--- Course Scheduling Service tables.
--- These tables are owned by services/course_schedule and use the cs_ prefix.
--- Public data such as classrooms, buildings and building_adjacency stays in main_database.
+-- 选课与智能排课分服务业务表。
+-- 本文件中的表由 services/course_schedule 独立维护，统一使用 cs_ 前缀。
+-- 教室、楼栋和楼栋距离等公共数据仍由 main_database 维护，本服务只读使用。
 
 CREATE DATABASE IF NOT EXISTS course_schedule_database
     DEFAULT CHARACTER SET utf8mb4

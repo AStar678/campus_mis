@@ -1,9 +1,8 @@
-"""Course selection and intelligent scheduling service.
+"""选课与智能排课分服务。
 
-This sub-service owns the course scheduling business tables in
-course_schedule_database. It reads shared classroom and building data from
-main_database, and delegates login validation to the main service through
-/api/verify-token.
+本服务负责维护 course_schedule_database 中的选课排课业务表。
+公共教室、楼栋和楼栋距离数据从 main_database 只读获取；登录态统一委托主服务
+/api/verify-token 校验，避免分服务重复实现认证逻辑。
 """
 
 from datetime import datetime
@@ -22,10 +21,10 @@ from flask_sqlalchemy import SQLAlchemy
 app = Flask(__name__)
 CORS(app)
 
-# Database configuration.
+# 数据库配置。
 #
-# Default bind: course_schedule_database, owned by this service.
-# "main" bind: main_database, read-only shared campus data from the main service.
+# 默认绑定：course_schedule_database，由本服务独立维护。
+# main 绑定：main_database，只读访问主服务维护的校园公共数据。
 DB_HOST = os.getenv("DB_HOST", "47.93.226.110")
 DB_PORT = int(os.getenv("DB_PORT", "3306"))
 DB_USER = os.getenv("DB_USER", "root")
@@ -47,9 +46,9 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
 
-# Public tables owned by the main service. This service reads them only.
+# 主服务公共表映射，本服务只读使用，不修改表结构和公共数据。
 class Classroom(db.Model):
-    """Read-only classroom metadata from main_database."""
+    """教室基础信息，只读映射 main_database.classrooms。"""
 
     __bind_key__ = "main"
     __tablename__ = "classrooms"
@@ -59,7 +58,7 @@ class Classroom(db.Model):
 
 
 class Building(db.Model):
-    """Read-only campus building metadata from main_database."""
+    """楼栋基础信息，只读映射 main_database.buildings。"""
 
     __bind_key__ = "main"
     __tablename__ = "buildings"
@@ -69,7 +68,7 @@ class Building(db.Model):
 
 
 class BuildingAdjacency(db.Model):
-    """Read-only distance edges between campus buildings."""
+    """楼栋距离关系，只读映射 main_database.building_adjacency。"""
 
     __bind_key__ = "main"
     __tablename__ = "building_adjacency"
@@ -80,9 +79,9 @@ class BuildingAdjacency(db.Model):
     distance = db.Column(db.Float, nullable=False)
 
 
-# Course scheduling tables owned by this service.
+# 选课排课业务表，由本服务独立维护，统一使用 cs_ 表名前缀。
 class Course(db.Model):
-    """Course options that students can request and admins can schedule."""
+    """可选课程信息，供学生提交申请、管理员参与排课。"""
 
     __tablename__ = "cs_courses"
 
@@ -97,7 +96,7 @@ class Course(db.Model):
 
 
 class CourseRequest(db.Model):
-    """A student's course selection request."""
+    """学生选课申请记录。"""
 
     __tablename__ = "cs_course_requests"
     __table_args__ = (
@@ -115,7 +114,7 @@ class CourseRequest(db.Model):
 
 
 class TimeSlot(db.Model):
-    """Candidate time slots available for scheduling."""
+    """可用于排课的候选时间段。"""
 
     __tablename__ = "cs_time_slots"
 
@@ -127,7 +126,7 @@ class TimeSlot(db.Model):
 
 
 class ScheduleRun(db.Model):
-    """One execution record of the scheduling agent."""
+    """智能排课任务的一次执行记录。"""
 
     __tablename__ = "cs_schedule_runs"
 
@@ -139,7 +138,7 @@ class ScheduleRun(db.Model):
 
 
 class ScheduleResult(db.Model):
-    """Generated course-classroom-timeslot assignment."""
+    """智能排课生成的课程、教室和时间段分配结果。"""
 
     __tablename__ = "cs_schedule_results"
 
@@ -159,7 +158,7 @@ class ScheduleResult(db.Model):
 
 
 def serialize_course(course):
-    """Convert a Course row to the API response shape."""
+    """将课程模型转换为前端接口返回结构。"""
 
     request_count = CourseRequest.query.filter_by(course_id=course.course_id).count()
     return {
@@ -175,7 +174,7 @@ def serialize_course(course):
 
 
 def serialize_request(course_request):
-    """Convert a CourseRequest row to the API response shape."""
+    """将选课申请模型转换为前端接口返回结构。"""
 
     return {
         "id": course_request.id,
@@ -189,7 +188,7 @@ def serialize_request(course_request):
 
 
 def serialize_slot(slot):
-    """Convert a TimeSlot row to the API response shape."""
+    """将时间段模型转换为前端接口返回结构。"""
 
     return {
         "slot_id": slot.slot_id,
@@ -201,7 +200,7 @@ def serialize_slot(slot):
 
 
 def serialize_run(run):
-    """Convert a ScheduleRun row to the API response shape."""
+    """将排课执行记录转换为前端接口返回结构。"""
 
     return {
         "id": run.id,
@@ -213,7 +212,7 @@ def serialize_run(run):
 
 
 def serialize_result(result):
-    """Convert a ScheduleResult row to the API response shape."""
+    """将排课结果模型转换为前端接口返回结构。"""
 
     return {
         "id": result.id,
@@ -234,7 +233,7 @@ def serialize_result(result):
 
 
 def get_bearer_token():
-    """Read token from Authorization header, with query-string fallback for testing."""
+    """从 Authorization 请求头读取 token，兼容测试场景下的 query 参数。"""
 
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
@@ -243,7 +242,7 @@ def get_bearer_token():
 
 
 def verify_token_with_main_service(token):
-    """Ask the main service whether the incoming token is valid."""
+    """调用主服务校验 token，并返回当前登录用户信息。"""
 
     if not token:
         return None
@@ -265,7 +264,7 @@ def verify_token_with_main_service(token):
 
 
 def parse_positive_int(value, field_name, default=None):
-    """Parse a positive integer field from request JSON."""
+    """解析请求中的正整数字段。"""
 
     if value is None:
         return default
@@ -279,7 +278,7 @@ def parse_positive_int(value, field_name, default=None):
 
 
 def require_auth(*allowed_types):
-    """Require a valid main-service token and optional role constraints."""
+    """校验主服务登录态，并按需限制访问角色。"""
 
     def decorator(func):
         @wraps(func)
@@ -297,7 +296,7 @@ def require_auth(*allowed_types):
 
 
 def get_distance_between_buildings(building_name_a, building_name_b):
-    """Return known walking distance between two buildings, or a fallback penalty."""
+    """获取两栋楼之间的步行距离，缺失数据时返回默认惩罚距离。"""
 
     if not building_name_a or not building_name_b or building_name_a == building_name_b:
         return 0
@@ -316,7 +315,7 @@ def get_distance_between_buildings(building_name_a, building_name_b):
 
 
 def score_assignment(course, classroom, slot, request_count, used_pairs):
-    """Score one candidate assignment for the rule-based scheduling agent."""
+    """为单个课程、教室、时间段候选组合计算排课评分。"""
 
     capacity_gap = course.capacity - request_count
     capacity_score = 40 if capacity_gap >= 0 else max(0, 40 + capacity_gap * 2)
@@ -334,11 +333,10 @@ def score_assignment(course, classroom, slot, request_count, used_pairs):
 
 
 def run_schedule_agent(run_by):
-    """Generate schedule results with a rule-based agent.
+    """使用规则版 Agent 生成排课结果。
 
-    The current implementation is deterministic and explainable: it evaluates
-    course demand, capacity fit, classroom time conflicts, and building
-    distance. This keeps the feature demonstrable before plugging in a real LLM.
+    当前实现保持确定性和可解释性，综合评估课程需求、容量匹配、教室时间冲突和楼栋距离。
+    后续接入真正的智能 Agent 时，可复用本函数的输入输出结构。
     """
 
     courses = Course.query.filter_by(status="open").all()
@@ -401,7 +399,7 @@ def run_schedule_agent(run_by):
 
 @app.route("/api/course-schedule/health", methods=["GET"])
 def health_check():
-    """Health check for service discovery and local debugging."""
+    """健康检查接口，用于服务发现和本地调试。"""
 
     return jsonify({"status": "ok", "service": "course-schedule-service", "port": 5004})
 
@@ -409,7 +407,7 @@ def health_check():
 @app.route("/api/course-schedule/courses", methods=["GET"])
 @require_auth("student", "admin")
 def list_courses(_user):
-    """List course options for students and admins."""
+    """查询可选课程列表，学生和管理员可访问。"""
 
     courses = Course.query.order_by(Course.course_id).all()
     return jsonify({"success": True, "data": [serialize_course(course) for course in courses]})
@@ -418,7 +416,7 @@ def list_courses(_user):
 @app.route("/api/course-schedule/courses", methods=["POST"])
 @require_auth("admin")
 def create_course(_user):
-    """Create a course option. Admin only."""
+    """新增可选课程，仅管理员可访问。"""
 
     data = request.get_json() or {}
     required = ["course_id", "course_name"]
@@ -450,7 +448,7 @@ def create_course(_user):
 @app.route("/api/course-schedule/courses/<course_id>", methods=["PUT"])
 @require_auth("admin")
 def update_course(_user, course_id):
-    """Update a course option. Admin only."""
+    """更新可选课程信息，仅管理员可访问。"""
 
     course = db.session.get(Course, course_id)
     if not course:
@@ -480,7 +478,7 @@ def update_course(_user, course_id):
 @app.route("/api/course-schedule/courses/<course_id>", methods=["DELETE"])
 @require_auth("admin")
 def delete_course(_user, course_id):
-    """Delete a course and its local scheduling records. Admin only."""
+    """删除课程及本服务内关联排课数据，仅管理员可访问。"""
 
     course = db.session.get(Course, course_id)
     if not course:
@@ -496,7 +494,7 @@ def delete_course(_user, course_id):
 @app.route("/api/course-schedule/time-slots", methods=["GET"])
 @require_auth("student", "admin")
 def list_time_slots(_user):
-    """List candidate scheduling time slots."""
+    """查询候选排课时间段。"""
 
     slots = TimeSlot.query.order_by(TimeSlot.weekday, TimeSlot.start_time).all()
     return jsonify({"success": True, "data": [serialize_slot(slot) for slot in slots]})
@@ -505,7 +503,7 @@ def list_time_slots(_user):
 @app.route("/api/course-schedule/time-slots", methods=["POST"])
 @require_auth("admin")
 def create_time_slot(_user):
-    """Create a candidate scheduling time slot. Admin only."""
+    """新增候选排课时间段，仅管理员可访问。"""
 
     data = request.get_json() or {}
     required = ["weekday", "start_time", "end_time"]
@@ -533,7 +531,7 @@ def create_time_slot(_user):
 @app.route("/api/course-schedule/requests", methods=["POST"])
 @require_auth("student")
 def submit_course_request(user):
-    """Submit or update the current student's course request."""
+    """提交或更新当前学生的选课申请。"""
 
     data = request.get_json() or {}
     course_id = data.get("course_id")
@@ -565,7 +563,7 @@ def submit_course_request(user):
 @app.route("/api/course-schedule/requests/<int:request_id>", methods=["DELETE"])
 @require_auth("student")
 def cancel_course_request(user, request_id):
-    """Cancel the current student's request before it is scheduled."""
+    """撤销当前学生尚未完成排课的选课申请。"""
 
     course_request = db.session.get(CourseRequest, request_id)
     if not course_request or course_request.student_id != user["user_id"]:
@@ -581,7 +579,7 @@ def cancel_course_request(user, request_id):
 @app.route("/api/course-schedule/my-requests", methods=["GET"])
 @require_auth("student")
 def list_my_requests(user):
-    """List course requests submitted by the current student."""
+    """查询当前学生提交的选课申请。"""
 
     requests_for_student = CourseRequest.query.filter_by(student_id=user["user_id"]).all()
     return jsonify({
@@ -593,7 +591,7 @@ def list_my_requests(user):
 @app.route("/api/course-schedule/requests", methods=["GET"])
 @require_auth("admin")
 def list_all_requests(_user):
-    """List all course requests, optionally filtered by course_id. Admin only."""
+    """查询全部选课申请，可按课程编号过滤，仅管理员可访问。"""
 
     course_id = request.args.get("course_id")
     query = CourseRequest.query
@@ -609,7 +607,7 @@ def list_all_requests(_user):
 @app.route("/api/course-schedule/schedule-runs", methods=["GET"])
 @require_auth("admin")
 def list_schedule_runs(_user):
-    """List scheduling agent execution records. Admin only."""
+    """查询智能排课执行记录，仅管理员可访问。"""
 
     runs = ScheduleRun.query.order_by(ScheduleRun.created_at.desc()).all()
     return jsonify({"success": True, "data": [serialize_run(run) for run in runs]})
@@ -618,7 +616,7 @@ def list_schedule_runs(_user):
 @app.route("/api/course-schedule/agent/schedule", methods=["POST"])
 @require_auth("admin")
 def schedule_courses(user):
-    """Trigger the rule-based intelligent scheduling agent. Admin only."""
+    """触发规则版智能排课，仅管理员可访问。"""
 
     run, error = run_schedule_agent(user["user_id"])
     if error:
@@ -637,10 +635,9 @@ def schedule_courses(user):
 @app.route("/api/course-schedule/results", methods=["GET"])
 @require_auth("student", "admin")
 def list_results(user):
-    """List schedule results.
+    """查询排课结果。
 
-    Admins can see all generated results. Students only see published results
-    for courses they requested.
+    管理员可查看全部生成结果；学生只能查看自己已申请课程中已发布的排课结果。
     """
 
     query = ScheduleResult.query
@@ -659,7 +656,7 @@ def list_results(user):
 @app.route("/api/course-schedule/results/publish", methods=["POST"])
 @require_auth("admin")
 def publish_results(_user):
-    """Publish generated schedule results so students can view them."""
+    """发布排课结果，发布后学生端可查看。"""
 
     updated = ScheduleResult.query.update({"is_published": True})
     db.session.commit()
