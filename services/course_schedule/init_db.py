@@ -1,9 +1,17 @@
+"""选课与智能排课分服务数据库初始化脚本。
+
+该脚本负责创建本服务独立数据库、初始化 cs_ 前缀业务表，并写入演示用课程和时间段数据。
+重复执行时会保留已有数据，避免覆盖开发过程中的测试记录。
+"""
+
 import pymysql
 
 from app import Course, DB_HOST, DB_NAME, DB_PASS_RAW, DB_PORT, DB_USER, TimeSlot, app, db
 
 
 def create_database():
+    """创建选课排课服务数据库。"""
+
     conn = pymysql.connect(
         host=DB_HOST,
         port=DB_PORT,
@@ -23,11 +31,15 @@ def create_database():
 
 
 def init_tables():
+    """根据 SQLAlchemy 模型创建本服务业务表。"""
+
     with app.app_context():
         db.metadatas[None].create_all(bind=db.engines[None])
 
 
 def insert_seed_data():
+    """写入演示用时间段和课程数据。"""
+
     with app.app_context():
         if not TimeSlot.query.first():
             slots = [

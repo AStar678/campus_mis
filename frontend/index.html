@@ -184,6 +184,18 @@
             color: #276749;
             font-size: 13px;
         }
+        .stat-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+        .stat-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 30px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: #edf5ff;
+            color: #174f8c;
+            font-size: 13px;
+        }
 
         @media (max-width: 860px) {
             .top-bar { align-items: flex-start; flex-direction: column; }
@@ -245,6 +257,20 @@
                     @click="activeTab = tab.key">
                     {{ tab.label }}
                 </button>
+                <button
+                    v-if="userInfo.user_type === 'student'"
+                    class="tab"
+                    :class="{ active: activeTab === 'schedule' }"
+                    @click="activeTab = 'schedule'; loadScheduleStudent()">
+                    选课排课
+                </button>
+                <button
+                    v-if="userInfo.user_type === 'admin'"
+                    class="tab"
+                    :class="{ active: activeTab === 'schedule-admin' }"
+                    @click="activeTab = 'schedule-admin'; loadScheduleAdmin()">
+                    选课排课
+                </button>
             </div>
 
             <div class="layout" v-if="userInfo.user_type !== 'admin'">
@@ -276,7 +302,74 @@
                 </aside>
 
                 <div class="content-stack">
-                    <template v-if="selectedCourse">
+                    <section class="panel" v-if="activeTab === 'schedule'">
+                        <div class="section-head">
+                            <h2>选课与排课</h2>
+                            <button class="btn secondary" @click="loadScheduleStudent">刷新</button>
+                        </div>
+                        <div class="grid-2">
+                            <article class="card" v-for="course in scheduleCourses" :key="course.course_id">
+                                <div class="section-head">
+                                    <div>
+                                        <div class="card-title">{{ course.course_name }}</div>
+                                        <div class="meta">{{ course.course_id }} · 教师 {{ course.teacher_id || '-' }}</div>
+                                    </div>
+                                    <span class="score-pill">{{ course.request_count }} 人已选</span>
+                                </div>
+                                <div class="muted">容量 {{ course.capacity }} · 每周 {{ course.hours_per_week }} 学时 · 偏好楼栋 {{ course.preferred_building || '-' }}</div>
+                                <div class="field" style="margin-top: 12px;">
+                                    <label>志愿级别</label>
+                                    <select v-model="schedulePreferenceDrafts[course.course_id]">
+                                        <option value="1">第一志愿</option>
+                                        <option value="2">第二志愿</option>
+                                        <option value="3">第三志愿</option>
+                                    </select>
+                                </div>
+                                <div class="actions">
+                                    <button class="btn success" @click="submitScheduleRequest(course)">提交选课申请</button>
+                                </div>
+                            </article>
+                            <div class="empty" v-if="!scheduleCourses.length">暂无可选课程</div>
+                        </div>
+                        <section style="margin-top: 18px;">
+                            <div class="section-head"><h2>我的申请</h2></div>
+                            <div class="table-wrap" v-if="scheduleRequests.length">
+                                <table>
+                                    <thead><tr><th>课程</th><th>志愿</th><th>状态</th><th>提交时间</th><th>操作</th></tr></thead>
+                                    <tbody>
+                                        <tr v-for="item in scheduleRequests" :key="item.id">
+                                            <td>{{ item.course_name }}<br><span class="muted">{{ item.course_id }}</span></td>
+                                            <td>第 {{ item.preference_level }} 志愿</td>
+                                            <td>{{ item.status }}</td>
+                                            <td>{{ item.created_at }}</td>
+                                            <td><button class="btn danger" :disabled="item.status === 'scheduled'" @click="cancelScheduleRequest(item)">撤销</button></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="empty" v-else>暂无选课申请</div>
+                        </section>
+                        <section style="margin-top: 18px;">
+                            <div class="section-head"><h2>已发布排课结果</h2></div>
+                            <div class="table-wrap" v-if="scheduleResults.length">
+                                <table>
+                                    <thead><tr><th>课程</th><th>教室</th><th>时间</th><th>人数</th><th>说明</th></tr></thead>
+                                    <tbody>
+                                        <tr v-for="item in scheduleResults" :key="item.id">
+                                            <td>{{ item.course_name }}<br><span class="muted">{{ item.course_id }}</span></td>
+                                            <td>{{ item.classroom_id }}</td>
+                                            <td>周{{ item.weekday }} {{ item.start_time }}-{{ item.end_time }}</td>
+                                            <td>{{ item.enrolled_count }}</td>
+                                            <td>{{ item.reason || '-' }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="empty" v-else>暂无已发布结果</div>
+                        </section>
+                    </section>
+
+                    <template v-else-if="selectedCourse">
                         <section class="panel" v-if="activeTab === 'announcements'">
                             <div class="section-head">
                                 <h2>课堂公告 · {{ selectedCourse.name }}</h2>
@@ -435,7 +528,97 @@
             </div>
 
             <div class="content-stack" v-else>
-                <section class="panel">
+                <section class="panel" v-if="activeTab === 'schedule-admin'">
+                    <div class="section-head">
+                        <h2>选课与智能排课</h2>
+                        <div class="actions">
+                            <button class="btn secondary" @click="loadScheduleAdmin">刷新</button>
+                            <button class="btn success" @click="runScheduleAgent">触发智能排课</button>
+                            <button class="btn" @click="publishScheduleResults">发布结果</button>
+                        </div>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-chip">课程 {{ scheduleCourses.length }}</span>
+                        <span class="stat-chip">申请 {{ scheduleRequests.length }}</span>
+                        <span class="stat-chip">结果 {{ scheduleResults.length }}</span>
+                    </div>
+                    <form class="grid-3" @submit.prevent="createScheduleCourse">
+                        <div class="field"><label>课程编号</label><input v-model.trim="scheduleCourseForm.course_id" placeholder="CS004"></div>
+                        <div class="field"><label>课程名称</label><input v-model.trim="scheduleCourseForm.course_name" placeholder="数据库系统"></div>
+                        <div class="field"><label>授课教师</label><input v-model.trim="scheduleCourseForm.teacher_id" placeholder="1001"></div>
+                        <div class="field"><label>容量</label><input v-model="scheduleCourseForm.capacity" placeholder="40"></div>
+                        <div class="field"><label>每周学时</label><input v-model="scheduleCourseForm.hours_per_week" placeholder="2"></div>
+                        <div class="field"><label>偏好楼栋</label><input v-model.trim="scheduleCourseForm.preferred_building" placeholder="1号楼"></div>
+                        <div class="actions"><button class="btn" type="submit">新增排课课程</button></div>
+                    </form>
+                    <div class="table-wrap" v-if="scheduleCourses.length" style="margin-top: 18px;">
+                        <table>
+                            <thead><tr><th>课程</th><th>教师</th><th>容量</th><th>偏好楼栋</th><th>申请数</th><th>操作</th></tr></thead>
+                            <tbody>
+                                <tr v-for="course in scheduleCourses" :key="course.course_id">
+                                    <td><strong>{{ course.course_name }}</strong><br><span class="muted">{{ course.course_id }}</span></td>
+                                    <td>{{ course.teacher_id || '-' }}</td>
+                                    <td>{{ course.capacity }}</td>
+                                    <td>{{ course.preferred_building || '-' }}</td>
+                                    <td>{{ course.request_count }}</td>
+                                    <td><button class="btn danger" @click="deleteScheduleCourse(course)">删除</button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="grid-2" style="margin-top: 18px;">
+                        <section>
+                            <div class="section-head"><h2>新增时间段</h2></div>
+                            <form @submit.prevent="createScheduleTimeSlot">
+                                <div class="grid-3">
+                                    <div class="field"><label>星期</label><input v-model="scheduleSlotForm.weekday" placeholder="1"></div>
+                                    <div class="field"><label>开始</label><input v-model.trim="scheduleSlotForm.start_time" placeholder="08:00"></div>
+                                    <div class="field"><label>结束</label><input v-model.trim="scheduleSlotForm.end_time" placeholder="09:40"></div>
+                                </div>
+                                <div class="field"><label>标签</label><input v-model.trim="scheduleSlotForm.label" placeholder="周一 1-2 节"></div>
+                                <button class="btn" type="submit">新增时间段</button>
+                            </form>
+                        </section>
+                        <section>
+                            <div class="section-head"><h2>选课申请</h2></div>
+                            <div class="table-wrap" v-if="scheduleRequests.length">
+                                <table>
+                                    <thead><tr><th>学生</th><th>课程</th><th>志愿</th><th>状态</th></tr></thead>
+                                    <tbody>
+                                        <tr v-for="item in scheduleRequests" :key="item.id">
+                                            <td>{{ item.student_id }}</td>
+                                            <td>{{ item.course_name }}</td>
+                                            <td>{{ item.preference_level }}</td>
+                                            <td>{{ item.status }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="empty" v-else>暂无申请</div>
+                        </section>
+                    </div>
+                    <section style="margin-top: 18px;">
+                        <div class="section-head"><h2>排课结果</h2></div>
+                        <div class="table-wrap" v-if="scheduleResults.length">
+                            <table>
+                                <thead><tr><th>课程</th><th>教室</th><th>时间</th><th>人数</th><th>评分</th><th>发布</th></tr></thead>
+                                <tbody>
+                                    <tr v-for="item in scheduleResults" :key="item.id">
+                                        <td>{{ item.course_name }}<br><span class="muted">{{ item.reason }}</span></td>
+                                        <td>{{ item.classroom_id }}</td>
+                                        <td>周{{ item.weekday }} {{ item.start_time }}-{{ item.end_time }}</td>
+                                        <td>{{ item.enrolled_count }}</td>
+                                        <td>{{ item.score }}</td>
+                                        <td>{{ item.is_published ? '已发布' : '未发布' }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="empty" v-else>暂无排课结果</div>
+                    </section>
+                </section>
+
+                <section class="panel" v-if="activeTab === 'admin'">
                     <div class="section-head">
                         <h2>课程新增与分配教师</h2>
                     </div>
@@ -475,7 +658,7 @@
                     </form>
                 </section>
 
-                <section class="panel">
+                <section class="panel" v-if="activeTab === 'admin'">
                     <div class="section-head">
                         <h2>课程列表</h2>
                     </div>
@@ -539,10 +722,16 @@ createApp({
             submissions: [],
             grades: [],
             ddls: [],
+            scheduleCourses: [],
+            scheduleRequests: [],
+            scheduleResults: [],
+            schedulePreferenceDrafts: {},
             submissionDrafts: {},
             gradeDrafts: {},
             loginForm: { user_id: '', password: '', user_type: 'student' },
             courseForm: { code: '', name: '', teacher_id: '', target_grade: '', target_major: '', description: '' },
+            scheduleCourseForm: { course_id: '', course_name: '', teacher_id: '', capacity: 40, hours_per_week: 2, preferred_building: '' },
+            scheduleSlotForm: { weekday: 1, start_time: '08:00', end_time: '09:40', label: '' },
             assignmentForm: { title: '', due_at: '', content: '' },
             announcementForm: { title: '', content: '' },
             courseGradeForm: { student_id: '', score: '', comment: '' }
@@ -825,6 +1014,124 @@ createApp({
                 const current = this.assignments.find(item => item.id === this.selectedAssignmentId);
                 if (current) await this.loadSubmissions(current);
                 this.showToast('教师评分已保存');
+            } catch (err) {
+                this.showToast(err.message);
+            }
+        },
+        initSchedulePreferenceDrafts() {
+            this.scheduleCourses.forEach(course => {
+                if (!this.schedulePreferenceDrafts[course.course_id]) {
+                    this.schedulePreferenceDrafts[course.course_id] = '1';
+                }
+            });
+        },
+        async loadScheduleStudent() {
+            try {
+                const [courses, requests, results] = await Promise.all([
+                    this.api('/api/course-schedule/courses'),
+                    this.api('/api/course-schedule/my-requests'),
+                    this.api('/api/course-schedule/results')
+                ]);
+                this.scheduleCourses = courses;
+                this.scheduleRequests = requests;
+                this.scheduleResults = results;
+                this.initSchedulePreferenceDrafts();
+            } catch (err) {
+                this.showToast(err.message);
+            }
+        },
+        async loadScheduleAdmin() {
+            try {
+                const [courses, requests, results] = await Promise.all([
+                    this.api('/api/course-schedule/courses'),
+                    this.api('/api/course-schedule/requests'),
+                    this.api('/api/course-schedule/results')
+                ]);
+                this.scheduleCourses = courses;
+                this.scheduleRequests = requests;
+                this.scheduleResults = results;
+                this.initSchedulePreferenceDrafts();
+            } catch (err) {
+                this.showToast(err.message);
+            }
+        },
+        async submitScheduleRequest(course) {
+            try {
+                await this.api('/api/course-schedule/requests', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        course_id: course.course_id,
+                        preference_level: this.schedulePreferenceDrafts[course.course_id] || 1
+                    })
+                });
+                await this.loadScheduleStudent();
+                this.showToast('选课申请已提交');
+            } catch (err) {
+                this.showToast(err.message);
+            }
+        },
+        async cancelScheduleRequest(item) {
+            if (!confirm(`确认撤销 ${item.course_name} 的选课申请？`)) return;
+            try {
+                await this.api(`/api/course-schedule/requests/${item.id}`, { method: 'DELETE' });
+                await this.loadScheduleStudent();
+                this.showToast('选课申请已撤销');
+            } catch (err) {
+                this.showToast(err.message);
+            }
+        },
+        async createScheduleCourse() {
+            try {
+                await this.api('/api/course-schedule/courses', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.scheduleCourseForm)
+                });
+                this.scheduleCourseForm = { course_id: '', course_name: '', teacher_id: '', capacity: 40, hours_per_week: 2, preferred_building: '' };
+                await this.loadScheduleAdmin();
+                this.showToast('排课课程已新增');
+            } catch (err) {
+                this.showToast(err.message);
+            }
+        },
+        async deleteScheduleCourse(course) {
+            if (!confirm(`确认删除 ${course.course_name}？`)) return;
+            try {
+                await this.api(`/api/course-schedule/courses/${course.course_id}`, { method: 'DELETE' });
+                await this.loadScheduleAdmin();
+                this.showToast('排课课程已删除');
+            } catch (err) {
+                this.showToast(err.message);
+            }
+        },
+        async createScheduleTimeSlot() {
+            try {
+                await this.api('/api/course-schedule/time-slots', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.scheduleSlotForm)
+                });
+                this.scheduleSlotForm = { weekday: 1, start_time: '08:00', end_time: '09:40', label: '' };
+                this.showToast('时间段已新增');
+            } catch (err) {
+                this.showToast(err.message);
+            }
+        },
+        async runScheduleAgent() {
+            try {
+                await this.api('/api/course-schedule/agent/schedule', { method: 'POST' });
+                await this.loadScheduleAdmin();
+                this.showToast('智能排课已完成');
+            } catch (err) {
+                this.showToast(err.message);
+            }
+        },
+        async publishScheduleResults() {
+            try {
+                await this.api('/api/course-schedule/results/publish', { method: 'POST' });
+                await this.loadScheduleAdmin();
+                this.showToast('排课结果已发布');
             } catch (err) {
                 this.showToast(err.message);
             }

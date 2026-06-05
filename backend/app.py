@@ -1,9 +1,11 @@
 from datetime import datetime, timedelta
 import hashlib
 import os
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 import jwt
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, Response, jsonify, request, send_from_directory
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 
@@ -20,6 +22,7 @@ DB_HOST = os.environ.get('DB_HOST', '47.93.226.110')
 DB_PORT = int(os.environ.get('DB_PORT', 3306))
 DB_USER = os.environ.get('DB_USER', 'root')
 DB_PASS = os.environ.get('DB_PASS', 'MySQL%402026')
+COURSE_SCHEDULE_SERVICE_URL = os.environ.get('COURSE_SCHEDULE_SERVICE_URL', 'http://127.0.0.1:5004')
 
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'campus-mis-secret-key-2024-classroom-module')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
@@ -862,6 +865,31 @@ def ddl_api():
 @app.route('/api/health', methods=['GET'])
 def health_check():
     return jsonify({'status': 'ok', 'service': 'main-service', 'port': 5001})
+
+
+@app.route('/api/course-schedule/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE'])
+def proxy_course_schedule(path):
+    target = f"{COURSE_SCHEDULE_SERVICE_URL}/api/course-schedule/{path}"
+    if request.query_string:
+        target = f"{target}?{request.query_string.decode('utf-8')}"
+    headers = {
+        key: value
+        for key, value in request.headers.items()
+        if key.lower() not in ('host', 'content-length')
+    }
+    payload = request.get_data() if request.method in ('POST', 'PUT', 'DELETE') else None
+    proxy_request = Request(target, data=payload, headers=headers, method=request.method)
+    try:
+        with urlopen(proxy_request, timeout=10) as response:
+            body = response.read()
+            content_type = response.headers.get('Content-Type', 'application/json')
+            return Response(body, status=response.status, content_type=content_type)
+    except HTTPError as exc:
+        body = exc.read()
+        content_type = exc.headers.get('Content-Type', 'application/json')
+        return Response(body, status=exc.code, content_type=content_type)
+    except (URLError, TimeoutError):
+        return jsonify({'success': False, 'message': 'course schedule service unavailable'}), 502
 
 
 # ============ Page routes ============
