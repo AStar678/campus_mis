@@ -1,4 +1,4 @@
-"""选课与智能排课分服务。
+﻿"""选课与智能排课分服务。
 
 本服务负责维护 course_schedule_database 中的选课排课业务表。
 公共教室、楼栋和楼栋距离数据从 main_database 只读获取；登录态统一委托主服务
@@ -13,7 +13,7 @@ from urllib.request import Request, urlopen
 import json
 import os
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 
@@ -44,7 +44,6 @@ app.config["SQLALCHEMY_BINDS"] = {
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
-
 
 # 主服务公共表映射，本服务只读使用，不修改表结构和公共数据。
 class Classroom(db.Model):
@@ -161,6 +160,14 @@ def serialize_course(course):
     """将课程模型转换为前端接口返回结构。"""
 
     request_count = CourseRequest.query.filter_by(course_id=course.course_id).count()
+    active_request_count = CourseRequest.query.filter(
+        CourseRequest.course_id == course.course_id,
+        CourseRequest.status.in_(["submitted", "scheduled"]),
+    ).count()
+    status_label_map = {
+        "open": "开放选课",
+        "closed": "停止选课",
+    }
     return {
         "course_id": course.course_id,
         "course_name": course.course_name,
@@ -169,20 +176,30 @@ def serialize_course(course):
         "hours_per_week": course.hours_per_week,
         "preferred_building": course.preferred_building,
         "status": course.status,
+        "status_label": status_label_map.get(course.status, course.status),
         "request_count": request_count,
+        "active_request_count": active_request_count,
+        "remaining_capacity": max(course.capacity - active_request_count, 0),
     }
 
 
 def serialize_request(course_request):
     """将选课申请模型转换为前端接口返回结构。"""
 
+    status_label_map = {
+        "submitted": "已提交",
+        "scheduled": "已排课",
+        "cancelled": "已撤销",
+    }
     return {
         "id": course_request.id,
         "student_id": course_request.student_id,
         "course_id": course_request.course_id,
         "course_name": course_request.course.course_name if course_request.course else None,
         "preference_level": course_request.preference_level,
+        "preference_label": f"第 {course_request.preference_level} 意向",
         "status": course_request.status,
+        "status_label": status_label_map.get(course_request.status, course_request.status),
         "created_at": course_request.created_at.isoformat(),
     }
 
@@ -214,6 +231,16 @@ def serialize_run(run):
 def serialize_result(result):
     """将排课结果模型转换为前端接口返回结构。"""
 
+    weekday = result.slot.weekday if result.slot else None
+    weekday_label_map = {
+        1: "周一",
+        2: "周二",
+        3: "周三",
+        4: "周四",
+        5: "周五",
+        6: "周六",
+        7: "周日",
+    }
     return {
         "id": result.id,
         "run_id": result.run_id,
@@ -221,7 +248,8 @@ def serialize_result(result):
         "course_name": result.course.course_name if result.course else None,
         "classroom_id": result.classroom_id,
         "slot_id": result.slot_id,
-        "weekday": result.slot.weekday if result.slot else None,
+        "weekday": weekday,
+        "weekday_label": weekday_label_map.get(weekday, "-"),
         "start_time": result.slot.start_time if result.slot else None,
         "end_time": result.slot.end_time if result.slot else None,
         "enrolled_count": result.enrolled_count,
@@ -354,9 +382,9 @@ def run_schedule_agent(run_by):
     db.session.flush()
 
     for course in courses:
-        requests_for_course = CourseRequest.query.filter_by(
-            course_id=course.course_id,
-            status="submitted",
+        requests_for_course = CourseRequest.query.filter(
+            CourseRequest.course_id == course.course_id,
+            CourseRequest.status.in_(["submitted", "scheduled"]),
         ).all()
         request_count = len(requests_for_course)
         best = None
@@ -395,6 +423,23 @@ def run_schedule_agent(run_by):
     run.summary = f"完成 {len(results)} 门课程排课"
     db.session.commit()
     return run, None
+
+
+@app.route("/", methods=["GET"])
+def serve_course_schedule_page():
+    """返回选课排课分服务前端页面。"""
+
+    return send_from_directory(os.path.dirname(__file__), "index.html")
+
+
+@app.route("/api/course-schedule/me", methods=["GET"])
+def current_user_info():
+    """查询当前 token 对应的用户信息。"""
+
+    user = verify_token_with_main_service(get_bearer_token())
+    if not user:
+        return jsonify({"success": False, "message": "未登录或 token 无效"}), 401
+    return jsonify({"success": True, "data": user})
 
 
 @app.route("/api/course-schedule/health", methods=["GET"])
@@ -537,15 +582,39 @@ def submit_course_request(user):
     course_id = data.get("course_id")
     if not course_id:
         return jsonify({"success": False, "message": "course_id 必填"}), 400
-    if not db.session.get(Course, course_id):
+    course = db.session.get(Course, course_id)
+    if not course:
         return jsonify({"success": False, "message": "课程不存在"}), 404
+    if course.status != "open":
+        return jsonify({"success": False, "message": "当前课程未开放选课"}), 400
+    try:
+        preference_level = int(data.get("preference_level", 1))
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "message": "意向级别必须是数字"}), 400
+    if preference_level not in (1, 2, 3):
+        return jsonify({"success": False, "message": "意向级别只能是 1、2 或 3"}), 400
 
     existing = CourseRequest.query.filter_by(
         student_id=user["user_id"],
         course_id=course_id,
     ).first()
+    preference_conflict = CourseRequest.query.filter(
+        CourseRequest.student_id == user["user_id"],
+        CourseRequest.preference_level == preference_level,
+        CourseRequest.status.in_(["submitted", "scheduled"]),
+        CourseRequest.course_id != course_id,
+    ).first()
+    if preference_conflict:
+        conflict_name = preference_conflict.course.course_name if preference_conflict.course else preference_conflict.course_id
+        return jsonify({
+            "success": False,
+            "message": f"{conflict_name} 已经是第 {preference_level} 意向，请先调整或撤销原意向",
+        }), 400
+
     if existing:
-        existing.preference_level = int(data.get("preference_level", existing.preference_level))
+        if existing.status == "scheduled":
+            return jsonify({"success": False, "message": "已排课的申请不能修改意向"}), 400
+        existing.preference_level = preference_level
         existing.status = "submitted"
         db.session.commit()
         return jsonify({"success": True, "data": serialize_request(existing)})
@@ -553,7 +622,7 @@ def submit_course_request(user):
     course_request = CourseRequest(
         student_id=user["user_id"],
         course_id=course_id,
-        preference_level=int(data.get("preference_level", 1)),
+        preference_level=preference_level,
     )
     db.session.add(course_request)
     db.session.commit()
@@ -644,7 +713,10 @@ def list_results(user):
     if user["user_type"] == "student":
         requested_course_ids = [
             item.course_id
-            for item in CourseRequest.query.filter_by(student_id=user["user_id"]).all()
+            for item in CourseRequest.query.filter(
+                CourseRequest.student_id == user["user_id"],
+                CourseRequest.status.in_(["submitted", "scheduled"]),
+            ).all()
         ]
         query = query.filter(ScheduleResult.course_id.in_(requested_course_ids))
         query = query.filter_by(is_published=True)
@@ -665,3 +737,4 @@ def publish_results(_user):
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5004, debug=True)
+
