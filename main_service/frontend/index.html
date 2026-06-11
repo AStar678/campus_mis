@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>校园MIS系统</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; min-height: 100vh; }
+
+        /* 登录页 */
+        .login-container {
+            display: flex; justify-content: center; align-items: center; min-height: 100vh;
+        }
+        .login-box {
+            background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            width: 380px;
+        }
+        .login-box h1 { text-align: center; margin-bottom: 30px; color: #1a73e8; font-size: 24px; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 6px; color: #333; font-size: 14px; }
+        .form-group input, .form-group select {
+            width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px;
+            font-size: 14px; transition: border-color 0.3s;
+        }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: #1a73e8; }
+        .login-btn {
+            width: 100%; padding: 12px; background: #1a73e8; color: white; border: none;
+            border-radius: 6px; font-size: 16px; cursor: pointer; transition: background 0.3s;
+        }
+        .login-btn:hover { background: #1557b0; }
+        .login-btn:disabled { background: #ccc; cursor: not-allowed; }
+        .error-msg { color: #e53935; font-size: 13px; margin-top: 10px; text-align: center; }
+
+        /* 大厅页 */
+        .dashboard { min-height: 100vh; }
+        .top-bar {
+            background: white; padding: 16px 30px; display: flex; justify-content: space-between;
+            align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .top-bar .user-info { font-size: 14px; color: #555; }
+        .top-bar .user-info span { color: #1a73e8; font-weight: 600; }
+        .logout-btn {
+            padding: 8px 16px; background: #e53935; color: white; border: none;
+            border-radius: 4px; cursor: pointer; font-size: 13px;
+        }
+        .logout-btn:hover { background: #c62828; }
+        .dashboard-content { padding: 40px 30px; max-width: 1000px; margin: 0 auto; }
+        .dashboard-content h2 { margin-bottom: 30px; color: #333; }
+        .service-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+        }
+        .service-btn {
+            padding: 30px 20px; background: white; border: 1px solid #e0e0e0; border-radius: 10px;
+            text-align: center; cursor: pointer; transition: all 0.3s; font-size: 15px; color: #333;
+        }
+        .service-btn:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-2px); border-color: #1a73e8; }
+        .service-btn .icon { font-size: 32px; margin-bottom: 10px; }
+
+        /* 提示弹窗 */
+        .toast {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            background: #333; color: white; padding: 12px 24px; border-radius: 6px;
+            font-size: 14px; z-index: 1000; transition: opacity 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 提示弹窗 -->
+        <div class="toast" v-if="toast" >{{ toast }}</div>
+
+        <!-- 登录页面 -->
+        <div class="login-container" v-if="!isLoggedIn">
+            <div class="login-box">
+                <h1>校园MIS系统</h1>
+                <div class="form-group">
+                    <label>用户类型</label>
+                    <select v-model="loginForm.user_type">
+                        <option value="student">学生</option>
+                        <option value="teacher">教师</option>
+                        <option value="admin">管理员</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>{{ loginForm.user_type === 'student' ? '学号' : loginForm.user_type === 'teacher' ? '工号' : '管理员账号' }}</label>
+                    <input type="text" v-model="loginForm.user_id" :placeholder="idPlaceholder" @keyup.enter="handleLogin">
+                </div>
+                <div class="form-group">
+                    <label>密码</label>
+                    <input type="password" v-model="loginForm.password" placeholder="请输入密码" @keyup.enter="handleLogin">
+                </div>
+                <button class="login-btn" @click="handleLogin" :disabled="loading">
+                    {{ loading ? '登录中...' : '登 录' }}
+                </button>
+                <p class="error-msg" v-if="errorMsg">{{ errorMsg }}</p>
+            </div>
+        </div>
+
+        <!-- 大厅页面 -->
+        <div class="dashboard" v-else>
+            <div class="top-bar">
+                <div class="user-info">
+                    欢迎，<span>{{ userInfo.user_id }}</span>
+                    （{{ roleLabel }}）
+                </div>
+                <button class="logout-btn" @click="handleLogout">退出登录</button>
+            </div>
+            <div class="dashboard-content">
+                <h2>{{ roleLabel }}服务大厅</h2>
+                <div class="service-grid">
+                    <div class="service-btn" v-for="service in currentServices" :key="service.name" @click="clickService(service)">
+                        <div class="icon">{{ service.icon }}</div>
+                        <div>{{ service.name }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '';
+
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    isLoggedIn: false,
+                    loading: false,
+                    errorMsg: '',
+                    toast: '',
+                    token: '',
+                    userInfo: {},
+                    loginForm: {
+                        user_id: '',
+                        password: '',
+                        user_type: 'student'
+                    },
+                    // 各端的服务按钮（port 为分服务端口，0 表示未上线）
+                    studentServices: [
+                        { name: '选课系统', icon: '📚', port: 5004 },
+                        { name: '成绩查询', icon: '📊', port: 5002 },
+                        { name: '课堂互动', icon: '🎓', port: 5003 },
+                        { name: '校园墙', icon: '💬', port: 5005 },
+                    ],
+                    teacherServices: [
+                        { name: '课程管理', icon: '📖', port: 5002 },
+                        { name: '成绩管理', icon: '✏️', port: 5002 },
+                        { name: '课堂管理', icon: '🏫', port: 5003 },
+                        { name: '校园墙', icon: '💬', port: 5005 },
+                    ],
+                    adminServices: [
+                        { name: '用户管理', icon: '👥', port: 0 },
+                        { name: '教室管理', icon: '🏢', port: 0 },
+                        { name: '服务管理', icon: '⚙️', port: 0 },
+                        { name: '数据统计', icon: '📈', port: 0 },
+                    ]
+                }
+            },
+            computed: {
+                idPlaceholder() {
+                    if (this.loginForm.user_type === 'student') return '请输入8位学号';
+                    if (this.loginForm.user_type === 'teacher') return '请输入4位工号';
+                    return '请输入管理员账号';
+                },
+                roleLabel() {
+                    const map = { student: '学生', teacher: '教师', admin: '管理员' };
+                    return map[this.userInfo.user_type] || '';
+                },
+                currentServices() {
+                    if (this.userInfo.user_type === 'student') return this.studentServices;
+                    if (this.userInfo.user_type === 'teacher') return this.teacherServices;
+                    if (this.userInfo.user_type === 'admin') return this.adminServices;
+                    return [];
+                }
+            },
+            mounted() {
+                // 检查本地存储的 token
+                const savedToken = localStorage.getItem('mis_token');
+                if (savedToken) {
+                    this.token = savedToken;
+                    this.fetchUserInfo();
+                }
+            },
+            methods: {
+                async handleLogin() {
+                    this.errorMsg = '';
+                    if (!this.loginForm.user_id || !this.loginForm.password) {
+                        this.errorMsg = '请填写完整信息';
+                        return;
+                    }
+                    this.loading = true;
+                    try {
+                        const res = await fetch(`${API_BASE}/api/login`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(this.loginForm)
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            this.token = data.token;
+                            localStorage.setItem('mis_token', data.token);
+                            this.userInfo = { user_id: data.user_id, user_type: data.user_type };
+                            this.isLoggedIn = true;
+                            this.showToast('登录成功');
+                        } else {
+                            this.errorMsg = data.message || '登录失败';
+                        }
+                    } catch (e) {
+                        this.errorMsg = '网络错误，请确认后端服务已启动';
+                    }
+                    this.loading = false;
+                },
+                async handleLogout() {
+                    try {
+                        await fetch(`${API_BASE}/api/logout`, {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${this.token}` }
+                        });
+                    } catch (e) {}
+                    this.token = '';
+                    this.userInfo = {};
+                    this.isLoggedIn = false;
+                    localStorage.removeItem('mis_token');
+                    this.showToast('已退出登录');
+                },
+                async fetchUserInfo() {
+                    try {
+                        const res = await fetch(`${API_BASE}/api/user-info`, {
+                            headers: { 'Authorization': `Bearer ${this.token}` }
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            this.userInfo = data.data;
+                            this.isLoggedIn = true;
+                        } else {
+                            localStorage.removeItem('mis_token');
+                        }
+                    } catch (e) {
+                        localStorage.removeItem('mis_token');
+                    }
+                },
+                clickService(service) {
+                    if (!service.port) {
+                        this.showToast(`「${service.name}」服务暂未上线`);
+                        return;
+                    }
+                    // 拼接分服务地址，带上 token 参数
+                    const host = window.location.hostname;
+                    const url = `http://${host}:${service.port}?token=${this.token}`;
+                    window.open(url, '_blank');
+                },
+                showToast(msg) {
+                    this.toast = msg;
+                    setTimeout(() => { this.toast = ''; }, 2500);
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
