@@ -42,6 +42,7 @@ nohup.out
 *.sqlite3
 instance/
 backend/instance/
+campus_wall_service/uploads/
 
 # Build and package artifacts
 dist/
