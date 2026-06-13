@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>校园墙</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            min-height: 100vh;
+            background: #f0f2f5;
+            color: #333;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+        }
+        button, input, select, textarea { font: inherit; }
+        button { cursor: pointer; border: 0; }
+        textarea { resize: vertical; min-height: 96px; line-height: 1.6; }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background: #333;
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.14);
+        }
+        .top-bar {
+            background: #fff;
+            padding: 16px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .brand { display: grid; gap: 4px; }
+        .brand strong { color: #1a73e8; font-size: 20px; }
+        .brand span, .muted, .meta { color: #667085; font-size: 13px; line-height: 1.5; }
+        .top-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+        .workspace {
+            width: min(1180px, 100%);
+            margin: 0 auto;
+            padding: 28px 30px 40px;
+            display: grid;
+            gap: 18px;
+        }
+        .layout {
+            display: grid;
+            grid-template-columns: minmax(240px, 300px) 1fr;
+            gap: 18px;
+            align-items: start;
+        }
+        .panel, .card, .empty {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+        }
+        .panel { padding: 20px; }
+        .panel h2 { font-size: 18px; margin-bottom: 14px; color: #222; }
+        .panel h3 { font-size: 15px; margin: 16px 0 10px; color: #333; }
+        .section-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+        .section-head h2 { margin-bottom: 0; }
+        .field { display: grid; gap: 6px; margin-bottom: 14px; }
+        .field label { font-size: 13px; color: #555; }
+        .field input, .field select, .field textarea, .inline-input {
+            width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 10px 12px;
+            background: #fff;
+            color: #333;
+        }
+        .field input:focus, .field select:focus, .field textarea:focus, .inline-input:focus {
+            outline: none;
+            border-color: #1a73e8;
+            box-shadow: 0 0 0 2px rgba(26,115,232,0.12);
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 36px;
+            padding: 8px 16px;
+            border-radius: 6px;
+            background: #1a73e8;
+            color: #fff;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+        .btn:hover { background: #1557b0; }
+        .btn:disabled { background: #c7cdd6; cursor: not-allowed; }
+        .btn.secondary { background: #eef2f7; color: #333; }
+        .btn.secondary:hover { background: #e1e7ef; }
+        .btn.danger { background: #e53935; }
+        .btn.danger:hover { background: #c62828; }
+        .btn.success { background: #2e7d32; }
+        .btn.success:hover { background: #246628; }
+        .actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        td .btn + .btn { margin-left: 8px; }
+        .view-tabs { display: grid; gap: 8px; margin-bottom: 16px; }
+        .view-tab {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 6px;
+            color: #333;
+            background: #eef2f7;
+            text-align: left;
+        }
+        .view-tab.active { color: #fff; background: #1a73e8; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+        .stat-box {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 14px;
+        }
+        .stat-value { font-size: 24px; font-weight: 700; color: #1a73e8; margin-bottom: 4px; }
+        .list { display: grid; gap: 12px; }
+        .card { padding: 16px; }
+        .card-title { font-weight: 700; margin-bottom: 8px; color: #222; }
+        .post-content { margin: 10px 0; line-height: 1.7; white-space: pre-wrap; }
+        .post-preview {
+            margin-top: 10px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+        }
+        .post-preview img, .detail-images img {
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 1px solid #e0e0e0;
+            background: #f8fafc;
+        }
+        .detail-images {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 14px;
+        }
+        .file-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .edit-box {
+            margin-top: 12px;
+            padding: 14px;
+            background: #f8fafc;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+        }
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            min-height: 26px;
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: #eef2f7;
+            color: #475467;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+        .pill.danger { background: #fde8e7; color: #c62828; }
+        .pill.warning { background: #fff4db; color: #9a5b13; }
+        .pill.success { background: #e8f5e9; color: #2e7d32; }
+        .keyword-list { display: flex; flex-wrap: wrap; gap: 8px; }
+        .empty {
+            padding: 28px;
+            text-align: center;
+            color: #667085;
+            border-style: dashed;
+        }
+        .table-wrap {
+            overflow-x: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background: #fff;
+        }
+        table { width: 100%; border-collapse: collapse; min-width: 820px; table-layout: fixed; }
+        th, td { padding: 11px 12px; border-bottom: 1px solid #edf0f3; text-align: left; vertical-align: top; }
+        th { background: #f8fafc; color: #667085; font-size: 13px; font-weight: 600; }
+        tr:last-child td { border-bottom: 0; }
+        .admin-post-table { min-width: 1180px; }
+        .admin-post-table th:nth-child(1), .admin-post-table td:nth-child(1) { width: 110px; }
+        .admin-post-table th:nth-child(2), .admin-post-table td:nth-child(2) { width: 110px; }
+        .admin-post-table th:nth-child(4), .admin-post-table td:nth-child(4) { width: 110px; }
+        .admin-post-table th:nth-child(5), .admin-post-table td:nth-child(5) { width: 110px; }
+        .admin-post-table th:nth-child(6), .admin-post-table td:nth-child(6) { width: 150px; }
+        .admin-post-table th:nth-child(7), .admin-post-table td:nth-child(7) { width: 150px; }
+        .admin-post-table .post-content {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .admin-post-table .post-preview {
+            grid-template-columns: repeat(3, 72px);
+            gap: 6px;
+        }
+        .admin-post-table .post-preview img {
+            width: 72px;
+            height: 54px;
+            aspect-ratio: auto;
+        }
+        .admin-post-table .delete-reason-cell .inline-input {
+            width: 100%;
+            min-width: 0;
+            height: 36px;
+            padding: 8px 10px;
+            font-size: 13px;
+        }
+        .admin-post-table .operation-cell {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: nowrap;
+        }
+        .admin-post-table .operation-cell .btn {
+            width: 58px;
+            min-height: 34px;
+            padding: 7px 10px;
+            font-size: 13px;
+        }
+        .admin-post-table .operation-cell .btn + .btn { margin-left: 0; }
+        .admin-post-table .operation-cell .muted { white-space: nowrap; }
+        .danger-text { color: #c62828; }
+        .notice-page {
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+        }
+        .notice-box {
+            width: min(480px, 100%);
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 28px;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+        .notice-box h1 { color: #1a73e8; font-size: 22px; margin-bottom: 12px; }
+        .pagination {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 14px;
+        }
+        .modal-mask {
+            position: fixed;
+            inset: 0;
+            z-index: 900;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+            background: rgba(15, 23, 42, 0.42);
+        }
+        .modal-panel {
+            width: min(760px, 100%);
+            max-height: min(820px, 88vh);
+            overflow: auto;
+            background: #fff;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            box-shadow: 0 24px 80px rgba(0,0,0,0.24);
+            padding: 22px;
+        }
+
+        @media (max-width: 900px) {
+            .top-bar { flex-direction: column; align-items: flex-start; }
+            .top-actions { justify-content: flex-start; }
+            .layout, .grid-2, .stats-grid, .detail-images { grid-template-columns: 1fr; }
+            .workspace { padding: 18px 16px 32px; }
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="toast" v-if="toast">{{ toast }}</div>
+
+    <main class="notice-page" v-if="!token">
+        <section class="notice-box">
+            <h1>校园墙</h1>
+            <p class="muted">请先从主服务大厅登录后进入校园墙。</p>
+            <div class="actions" style="justify-content:center; margin-top:18px;">
+                <button class="btn" @click="goMainService">返回主服务</button>
+            </div>
+        </section>
+    </main>
+
+    <main v-else>
+        <header class="top-bar">
+            <div class="brand">
+                <strong>校园墙</strong>
+                <span>{{ roleLabel }} · {{ userInfo.user_id || '未验证' }}</span>
+            </div>
+            <div class="top-actions">
+                <button class="btn secondary" @click="loadDashboard" :disabled="loading">刷新</button>
+                <button class="btn secondary" @click="goMainService">返回主页</button>
+            </div>
+        </header>
+
+        <section class="workspace" v-if="authError">
+            <div class="empty danger-text">{{ authError }}</div>
+        </section>
+
+        <section class="workspace" v-else-if="isAdmin">
+            <section class="panel">
+                <div class="section-head">
+                    <h2>舆情趋势</h2>
+                    <div class="actions">
+                        <select class="inline-input" style="width:120px;" v-model="trendDays" @change="loadTrends">
+                            <option value="7">近7天</option>
+                            <option value="14">近14天</option>
+                            <option value="30">近30天</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="stats-grid" v-if="wallTrends">
+                    <div class="stat-box">
+                        <div class="stat-value">{{ wallTrends.total_posts }}</div>
+                        <div class="muted">总帖子</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value">{{ wallTrends.risk_posts }}</div>
+                        <div class="muted">高风险帖</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value">{{ wallTrends.deleted_posts }}</div>
+                        <div class="muted">已删除</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value">{{ wallTrends.pending_alerts }}</div>
+                        <div class="muted">待处理告警</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value">{{ wallTrends.role_distribution.student }}/{{ wallTrends.role_distribution.teacher }}</div>
+                        <div class="muted">学生/教师</div>
+                    </div>
+                </div>
+                <div class="grid-2" style="margin-top:16px;" v-if="wallTrends">
+                    <div>
+                        <h3>热点关键词</h3>
+                        <div class="keyword-list" v-if="wallTrends.keywords.length">
+                            <span class="pill" v-for="item in wallTrends.keywords" :key="item.keyword">
+                                {{ item.keyword }} · {{ item.count }}
+                            </span>
+                        </div>
+                        <div class="empty" v-else>暂无热点关键词</div>
+                    </div>
+                    <div>
+                        <h3>每日发帖量</h3>
+                        <div class="keyword-list" v-if="wallTrends.daily_counts.length">
+                            <span class="pill" v-for="item in wallTrends.daily_counts" :key="item.date">
+                                {{ item.date.slice(5) }} · {{ item.count }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="section-head">
+                    <h2>重大舆情告警</h2>
+                    <div class="actions">
+                        <select class="inline-input" style="width:130px;" v-model="alertFilter" @change="loadAlerts(1)">
+                            <option value="">全部告警</option>
+                            <option value="pending">待处理</option>
+                            <option value="handled">已处理</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="list" v-if="wallAlerts.length">
+                    <article class="card" v-for="alert in wallAlerts" :key="alert.id">
+                        <div class="section-head">
+                            <div>
+                                <div class="card-title">{{ alert.reason }}</div>
+                                <div class="meta">
+                                    {{ alert.created_at }} · {{ alertTypeText(alert.alert_type) }} · 关键词 {{ alert.keywords || '-' }}
+                                </div>
+                            </div>
+                            <div class="actions">
+                                <span class="pill" :class="{ danger: alert.alert_level === 'critical', warning: alert.alert_level === 'warning' }">
+                                    {{ alertLevelText(alert.alert_level) }}
+                                </span>
+                                <span class="pill" :class="{ success: alert.status === 'handled' }">
+                                    {{ alertStatusText(alert.status) }}
+                                </span>
+                                <button class="btn success" v-if="alert.status !== 'handled'" @click="handleAlert(alert)">标记处理</button>
+                            </div>
+                        </div>
+                        <div class="post-content" v-if="alert.post">{{ alert.post.content }}</div>
+                        <div class="muted" v-if="alert.handled_at">处理人 {{ alert.handled_by }} · {{ alert.handled_at }}</div>
+                    </article>
+                </div>
+                <div class="empty" v-else>暂无告警</div>
+                <div class="pagination" v-if="alertPagination.total_pages > 1">
+                    <button class="btn secondary" :disabled="!alertPagination.has_prev" @click="changeAlertPage(alertPagination.page - 1)">上一页</button>
+                    <span class="muted">{{ alertPaginationText }}</span>
+                    <button class="btn secondary" :disabled="!alertPagination.has_next" @click="changeAlertPage(alertPagination.page + 1)">下一页</button>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="section-head">
+                    <h2>帖子管理</h2>
+                    <button class="btn secondary" @click="loadPosts">刷新帖子</button>
+                </div>
+                <div class="grid-2">
+                    <div class="field">
+                        <label>关键词</label>
+                        <input v-model.trim="postFilters.keyword" placeholder="搜索标题或内容" @keyup.enter="loadPosts(1)">
+                    </div>
+                    <div class="field">
+                        <label>作者类型</label>
+                        <select v-model="postFilters.author_type" @change="loadPosts(1)">
+                            <option value="">全部</option>
+                            <option value="student">学生</option>
+                            <option value="teacher">教师</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label>帖子状态</label>
+                        <select v-model="postFilters.status" @change="loadPosts(1)">
+                            <option value="">全部</option>
+                            <option value="active">正常</option>
+                            <option value="deleted">已删除</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label>风险等级</label>
+                        <select v-model="postFilters.risk_level" @change="loadPosts(1)">
+                            <option value="">全部</option>
+                            <option value="normal">无风险</option>
+                            <option value="high">高风险</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="actions" style="margin-bottom:14px;">
+                    <button class="btn" @click="loadPosts(1)">筛选</button>
+                    <button class="btn secondary" @click="resetPostFilters">重置</button>
+                </div>
+                <div class="table-wrap" v-if="wallPosts.length">
+                    <table class="admin-post-table">
+                        <thead>
+                            <tr>
+                                <th>发布时间</th>
+                                <th>作者</th>
+                                <th>内容</th>
+                                <th>状态</th>
+                                <th>风险</th>
+                                <th>删除原因</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="post in wallPosts" :key="post.id">
+                                <td>{{ post.created_at }}</td>
+                                <td>{{ roleText(post.author_type) }}<br><span class="muted">{{ post.author_id }}</span></td>
+                                <td>
+                                    <strong>{{ post.title || '校园动态' }}</strong>
+                                    <div class="post-content">{{ post.content }}</div>
+                                    <div class="post-preview" v-if="post.images && post.images.length">
+                                        <img v-for="image in post.images.slice(0, 3)" :key="image.url" :src="image.url" alt="帖子照片">
+                                    </div>
+                                    <div class="muted" v-if="post.matched_keywords">命中：{{ post.matched_keywords }}</div>
+                                </td>
+                                <td>{{ postStatusText(post.status) }}<br><span class="muted" v-if="post.deleted_at">{{ post.deleted_at }}</span></td>
+                                <td>
+                                    <span class="pill" :class="{ danger: post.risk_level === 'high' }">
+                                        {{ riskShortText(post.risk_level) }}
+                                    </span>
+                                </td>
+                                <td class="delete-reason-cell">
+                                    <input
+                                        v-if="post.status !== 'deleted'"
+                                        class="inline-input"
+                                        v-model.trim="deleteReasons[post.id]"
+                                        placeholder="删除原因">
+                                    <span v-else>{{ post.delete_reason || '-' }}</span>
+                                </td>
+                                <td class="operation-cell">
+                                    <button class="btn secondary" @click="openPostDetail(post)">详情</button>
+                                    <button class="btn danger" v-if="post.status !== 'deleted'" @click="deletePost(post)">删除</button>
+                                    <span class="muted" v-else>已处理</span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="empty" v-else>暂无帖子</div>
+                <div class="pagination" v-if="postPagination.total_pages > 1">
+                    <button class="btn secondary" :disabled="!postPagination.has_prev" @click="changePage(postPagination.page - 1)">上一页</button>
+                    <span class="muted">{{ paginationText }}</span>
+                    <button class="btn secondary" :disabled="!postPagination.has_next" @click="changePage(postPagination.page + 1)">下一页</button>
+                </div>
+            </section>
+        </section>
+
+        <section class="workspace" v-else>
+            <div class="layout">
+                <aside class="panel">
+                    <h2>{{ roleLabel }}主页</h2>
+                    <div class="view-tabs">
+                        <button class="view-tab" :class="{ active: activeClientView === 'feed' }" @click="switchClientView('feed')">
+                            校园动态
+                        </button>
+                        <button class="view-tab" :class="{ active: activeClientView === 'profile' }" @click="switchClientView('profile')">
+                            我的主页
+                        </button>
+                    </div>
+                    <div class="field" v-if="activeClientView === 'feed'">
+                        <label>关键词</label>
+                        <input v-model.trim="postFilters.keyword" placeholder="搜索标题或内容" @keyup.enter="loadPosts(1)">
+                    </div>
+                    <div class="field" v-if="activeClientView === 'feed'">
+                        <label>作者类型</label>
+                        <select v-model="postFilters.author_type" @change="loadPosts(1)">
+                            <option value="">全部</option>
+                            <option value="student">学生</option>
+                            <option value="teacher">教师</option>
+                        </select>
+                    </div>
+                    <div class="field" v-if="activeClientView === 'profile'">
+                        <label>帖子状态</label>
+                        <select v-model="postFilters.status" @change="loadPosts(1)">
+                            <option value="">全部</option>
+                            <option value="active">正常</option>
+                            <option value="deleted">已删除</option>
+                        </select>
+                    </div>
+                    <div class="actions" v-if="activeClientView === 'feed'">
+                        <button class="btn" @click="loadPosts(1)">筛选</button>
+                        <button class="btn secondary" @click="resetPostFilters">重置</button>
+                    </div>
+                    <div class="muted" v-if="activeClientView === 'profile'">
+                        这里展示你发布过的帖子。正常状态的帖子可以编辑或删除，已删除帖子仅保留查看。
+                    </div>
+                </aside>
+
+                <div class="list">
+                    <section class="panel" v-if="activeClientView === 'feed'">
+                        <div class="section-head">
+                            <h2>发布动态</h2>
+                            <span class="muted">{{ postForm.content.length }}/2000</span>
+                        </div>
+                        <form @submit.prevent="createPost">
+                            <div class="field">
+                                <label>标题</label>
+                                <input v-model.trim="postForm.title" maxlength="100" placeholder="可选">
+                            </div>
+                            <div class="field">
+                                <label>动态内容</label>
+                                <textarea v-model.trim="postForm.content" maxlength="2000" placeholder="分享校园见闻、课程交流或活动信息"></textarea>
+                            </div>
+                            <div class="field">
+                                <label>上传照片</label>
+                                <input ref="imageInput" type="file" accept="image/*" multiple @change="onImagesSelected">
+                                <div class="muted">最多上传3张照片，单张不超过5MB。</div>
+                                <div class="file-list" v-if="selectedImages.length">
+                                    <span class="pill" v-for="file in selectedImages" :key="file.name">{{ file.name }}</span>
+                                    <button class="btn secondary" type="button" @click="clearImages">清空照片</button>
+                                </div>
+                            </div>
+                            <div class="actions">
+                                <button class="btn" type="submit" :disabled="posting">发布动态</button>
+                            </div>
+                        </form>
+                    </section>
+
+                    <section class="panel">
+                        <div class="section-head">
+                            <h2>{{ activeClientView === 'profile' ? '我的帖子' : '校园动态' }}</h2>
+                            <button class="btn secondary" @click="loadPosts">刷新动态</button>
+                        </div>
+                        <div class="list" v-if="wallPosts.length">
+                            <article class="card" v-for="post in wallPosts" :key="post.id" @click="openPostDetail(post)">
+                                <div class="section-head">
+                                    <div>
+                                        <div class="card-title">{{ post.title || '校园动态' }}</div>
+                                        <div class="meta">{{ post.created_at }} · {{ roleText(post.author_type) }} {{ post.author_id }}</div>
+                                    </div>
+                                    <div class="actions">
+                                        <span
+                                            class="pill"
+                                            v-if="activeClientView === 'profile'"
+                                            :class="{ success: post.status === 'active', danger: post.status === 'deleted' }">
+                                            {{ postStatusBadgeText(post.status) }}
+                                        </span>
+                                        <span class="pill" :class="{ danger: post.risk_level === 'high' }">
+                                            {{ riskText(post.risk_level) }}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="post-content">{{ post.content }}</div>
+                                <div class="post-preview" v-if="post.images && post.images.length">
+                                    <img v-for="image in post.images.slice(0, 3)" :key="image.url" :src="image.url" alt="帖子照片">
+                                </div>
+                                <div class="muted" v-if="post.matched_keywords">命中关键词：{{ post.matched_keywords }}</div>
+                                <div class="actions" style="margin-top:10px;">
+                                    <button class="btn secondary" type="button" @click.stop="openPostDetail(post)">查看详情</button>
+                                    <button
+                                        class="btn secondary"
+                                        type="button"
+                                        v-if="activeClientView === 'profile' && post.status === 'active'"
+                                        @click.stop="startEditPost(post)">
+                                        编辑
+                                    </button>
+                                    <button
+                                        class="btn danger"
+                                        type="button"
+                                        v-if="activeClientView === 'profile' && post.status === 'active'"
+                                        @click.stop="deletePost(post)">
+                                        删除
+                                    </button>
+                                </div>
+                                <form class="edit-box" v-if="editingPostId === post.id" @click.stop @submit.prevent.stop="updatePost(post)">
+                                    <div class="field">
+                                        <label>标题</label>
+                                        <input v-model.trim="editForm.title" maxlength="100" placeholder="可选">
+                                    </div>
+                                    <div class="field">
+                                        <label>动态内容</label>
+                                        <textarea v-model.trim="editForm.content" maxlength="2000"></textarea>
+                                    </div>
+                                    <div class="field">
+                                        <label>替换照片</label>
+                                        <input type="file" accept="image/*" multiple @change="onEditImagesSelected">
+                                        <div class="muted">选择新照片后会替换原照片；不选择则保留原照片。</div>
+                                        <div class="file-list" v-if="editImages.length">
+                                            <span class="pill" v-for="file in editImages" :key="file.name">{{ file.name }}</span>
+                                        </div>
+                                    </div>
+                                    <div class="actions">
+                                        <button class="btn" type="submit" :disabled="posting">保存修改</button>
+                                        <button class="btn secondary" type="button" @click.stop="cancelEditPost">取消</button>
+                                    </div>
+                                </form>
+                            </article>
+                        </div>
+                        <div class="empty" v-else>{{ emptyPostText }}</div>
+                        <div class="pagination" v-if="postPagination.total_pages > 1">
+                            <button class="btn secondary" :disabled="!postPagination.has_prev" @click="changePage(postPagination.page - 1)">上一页</button>
+                            <span class="muted">{{ paginationText }}</span>
+                            <button class="btn secondary" :disabled="!postPagination.has_next" @click="changePage(postPagination.page + 1)">下一页</button>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div class="modal-mask" v-if="selectedPost" @click.self="closePostDetail">
+        <section class="modal-panel">
+            <div class="section-head">
+                <div>
+                    <h2>{{ selectedPost.title || '校园动态' }}</h2>
+                    <div class="meta">
+                        {{ selectedPost.created_at }} · {{ roleText(selectedPost.author_type) }} {{ selectedPost.author_id }}
+                    </div>
+                </div>
+                <button class="btn secondary" @click="closePostDetail">关闭</button>
+            </div>
+            <div class="actions" style="margin-bottom:12px;">
+                <span class="pill" :class="{ danger: selectedPost.risk_level === 'high' }">
+                    {{ riskText(selectedPost.risk_level) }}
+                </span>
+                <span
+                    class="pill"
+                    v-if="isAdmin || isOwnPost(selectedPost)"
+                    :class="{ success: selectedPost.status === 'active', danger: selectedPost.status === 'deleted' }">
+                    {{ postStatusBadgeText(selectedPost.status) }}
+                </span>
+                <span class="pill" v-if="selectedPost.matched_keywords">关键词：{{ selectedPost.matched_keywords }}</span>
+            </div>
+            <div class="post-content">{{ selectedPost.content }}</div>
+            <div class="detail-images" v-if="selectedPost.images && selectedPost.images.length">
+                <img v-for="image in selectedPost.images" :key="image.url" :src="image.url" alt="帖子照片">
+            </div>
+            <div class="muted" style="margin-top:14px;" v-if="(isAdmin || isOwnPost(selectedPost)) && selectedPost.deleted_at">
+                删除人 {{ selectedPost.deleted_by }} · {{ selectedPost.deleted_at }} · {{ selectedPost.delete_reason || '-' }}
+            </div>
+        </section>
+    </div>
+</div>
+
+<script>
+const API_BASE = '';
+const { createApp } = Vue;
+
+createApp({
+    data() {
+        const params = new URLSearchParams(window.location.search);
+        return {
+            token: params.get('token') || localStorage.getItem('campus_wall_token') || '',
+            userInfo: {},
+            authError: '',
+            loading: false,
+            postsLoading: false,
+            posting: false,
+            toast: '',
+            activeClientView: 'feed',
+            postLoadSeq: 0,
+            wallPosts: [],
+            postPagination: {
+                page: 1,
+                page_size: 10,
+                total: 0,
+                total_pages: 1,
+                has_prev: false,
+                has_next: false
+            },
+            wallAlerts: [],
+            alertPagination: {
+                page: 1,
+                page_size: 3,
+                total: 0,
+                total_pages: 1,
+                has_prev: false,
+                has_next: false
+            },
+            wallTrends: null,
+            trendDays: '7',
+            alertFilter: '',
+            postForm: { title: '', content: '' },
+            selectedImages: [],
+            selectedPost: null,
+            editingPostId: null,
+            editForm: { title: '', content: '' },
+            editImages: [],
+            postFilters: { keyword: '', author_type: '', status: '', risk_level: '' },
+            deleteReasons: {}
+        };
+    },
+    computed: {
+        isAdmin() {
+            return this.userInfo.user_type === 'admin';
+        },
+        roleLabel() {
+            return this.roleText(this.userInfo.user_type);
+        },
+        paginationText() {
+            return `第 ${this.postPagination.page} / ${this.postPagination.total_pages} 页，共 ${this.postPagination.total} 条`;
+        },
+        alertPaginationText() {
+            return `第 ${this.alertPagination.page} / ${this.alertPagination.total_pages} 页，共 ${this.alertPagination.total} 条`;
+        },
+        emptyPostText() {
+            if (this.postsLoading) return '加载中...';
+            return this.activeClientView === 'profile' ? '你还没有发布过帖子' : '暂无校园动态';
+        }
+    },
+    mounted() {
+        if (this.token) {
+            localStorage.setItem('campus_wall_token', this.token);
+            this.loadMe();
+        }
+    },
+    methods: {
+        authHeaders(extra = {}) {
+            return { ...extra, Authorization: `Bearer ${this.token}` };
+        },
+        async api(path, options = {}) {
+            const headers = options.headers || {};
+            const res = await fetch(`${API_BASE}${path}`, {
+                ...options,
+                headers: this.authHeaders(headers)
+            });
+            let data = {};
+            try {
+                data = await res.json();
+            } catch (err) {
+                throw new Error('校园墙服务无响应');
+            }
+            if (!res.ok || data.success === false) {
+                throw new Error(data.message || '请求失败');
+            }
+            return data.data;
+        },
+        async loadMe() {
+            this.loading = true;
+            this.authError = '';
+            try {
+                this.userInfo = await this.api('/api/wall/me');
+                await this.loadDashboard();
+            } catch (err) {
+                this.authError = err.message;
+                localStorage.removeItem('campus_wall_token');
+            } finally {
+                this.loading = false;
+            }
+        },
+        async loadDashboard() {
+            if (!this.userInfo.user_type) {
+                await this.loadMe();
+                return;
+            }
+            this.loading = true;
+            try {
+                if (this.isAdmin) {
+                    await Promise.all([this.loadPosts(), this.loadTrends(), this.loadAlerts()]);
+                } else {
+                    await this.loadPosts();
+                }
+            } catch (err) {
+                this.showToast(err.message);
+            } finally {
+                this.loading = false;
+            }
+        },
+        async loadPosts(page = this.postPagination.page || 1) {
+            const requestId = ++this.postLoadSeq;
+            this.postsLoading = true;
+            const params = new URLSearchParams();
+            params.set('page', page);
+            params.set('page_size', 10);
+            if (this.postFilters.keyword) params.set('keyword', this.postFilters.keyword);
+            if (this.activeClientView === 'profile') {
+                params.set('mine', 'true');
+                if (this.postFilters.status) params.set('status', this.postFilters.status);
+            } else if (this.postFilters.author_type) {
+                params.set('author_type', this.postFilters.author_type);
+            }
+            if (this.postFilters.risk_level) params.set('risk_level', this.postFilters.risk_level);
+            if (this.isAdmin) {
+                params.set('include_deleted', 'true');
+                if (this.postFilters.status) params.set('status', this.postFilters.status);
+            }
+            const query = params.toString();
+            try {
+                const data = await this.api(`/api/wall/posts${query ? `?${query}` : ''}`);
+                if (requestId !== this.postLoadSeq) return;
+                this.wallPosts = data.items || [];
+                this.postPagination = data.pagination || this.postPagination;
+            } finally {
+                if (requestId === this.postLoadSeq) this.postsLoading = false;
+            }
+        },
+        switchClientView(view) {
+            if (this.activeClientView === view) return;
+            this.activeClientView = view;
+            this.editingPostId = null;
+            this.selectedPost = null;
+            this.postFilters = { keyword: '', author_type: '', status: '', risk_level: '' };
+            this.postLoadSeq += 1;
+            this.wallPosts = [];
+            this.postPagination = {
+                page: 1,
+                page_size: 10,
+                total: 0,
+                total_pages: 1,
+                has_prev: false,
+                has_next: false
+            };
+            this.loadPosts(1);
+        },
+        onImagesSelected(event) {
+            const files = Array.from(event.target.files || []);
+            if (files.length > 3) {
+                this.showToast('每条动态最多上传3张照片');
+                this.clearImages();
+                return;
+            }
+            const tooLarge = files.find(file => file.size > 5 * 1024 * 1024);
+            if (tooLarge) {
+                this.showToast('单张照片不能超过5MB');
+                this.clearImages();
+                return;
+            }
+            this.selectedImages = files;
+        },
+        clearImages() {
+            this.selectedImages = [];
+            if (this.$refs.imageInput) this.$refs.imageInput.value = '';
+        },
+        async createPost() {
+            if (!this.postForm.content.trim()) {
+                this.showToast('动态内容不能为空');
+                return;
+            }
+            this.posting = true;
+            try {
+                const formData = new FormData();
+                formData.append('title', this.postForm.title);
+                formData.append('content', this.postForm.content);
+                this.selectedImages.forEach(file => formData.append('images', file));
+                await this.api('/api/wall/posts', {
+                    method: 'POST',
+                    body: formData
+                });
+                this.postForm = { title: '', content: '' };
+                this.clearImages();
+                await this.loadPosts(1);
+                this.showToast('动态已发布');
+            } catch (err) {
+                this.showToast(err.message);
+            } finally {
+                this.posting = false;
+            }
+        },
+        async deletePost(post) {
+            if (!confirm('确认删除这条校园墙动态？')) return;
+            const reason = this.deleteReasons[post.id] || '';
+            try {
+                await this.api(`/api/wall/posts/${post.id}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reason })
+                });
+                this.deleteReasons[post.id] = '';
+                if (this.isAdmin) {
+                    await Promise.all([this.loadPosts(), this.loadTrends(), this.loadAlerts()]);
+                } else {
+                    await this.loadPosts();
+                }
+                if (this.selectedPost && this.selectedPost.id === post.id) this.selectedPost = null;
+                if (this.editingPostId === post.id) this.cancelEditPost();
+                this.showToast(this.isAdmin ? '违规动态已删除' : '帖子已删除');
+            } catch (err) {
+                this.showToast(err.message);
+            }
+        },
+        startEditPost(post) {
+            this.editingPostId = post.id;
+            this.editForm = { title: post.title || '', content: post.content || '' };
+            this.editImages = [];
+        },
+        cancelEditPost() {
+            this.editingPostId = null;
+            this.editForm = { title: '', content: '' };
+            this.editImages = [];
+        },
+        onEditImagesSelected(event) {
+            const files = Array.from(event.target.files || []);
+            if (files.length > 3) {
+                this.showToast('每条动态最多上传3张照片');
+                event.target.value = '';
+                this.editImages = [];
+                return;
+            }
+            const tooLarge = files.find(file => file.size > 5 * 1024 * 1024);
+            if (tooLarge) {
+                this.showToast('单张照片不能超过5MB');
+                event.target.value = '';
+                this.editImages = [];
+                return;
+            }
+            this.editImages = files;
+        },
+        async updatePost(post) {
+            if (!this.editForm.content.trim()) {
+                this.showToast('动态内容不能为空');
+                return;
+            }
+            this.posting = true;
+            try {
+                const formData = new FormData();
+                formData.append('title', this.editForm.title);
+                formData.append('content', this.editForm.content);
+                if (this.editImages.length) {
+                    formData.append('replace_images', 'true');
+                    this.editImages.forEach(file => formData.append('images', file));
+                }
+                const updated = await this.api(`/api/wall/posts/${post.id}`, {
+                    method: 'PUT',
+                    body: formData
+                });
+                this.cancelEditPost();
+                await this.loadPosts();
+                if (this.selectedPost && this.selectedPost.id === updated.id) {
+                    this.selectedPost = updated;
+                }
+                this.showToast('帖子已更新');
+            } catch (err) {
+                this.showToast(err.message);
+            } finally {
+                this.posting = false;
+            }
+        },
+        async openPostDetail(post) {
+            try {
+                this.selectedPost = await this.api(`/api/wall/posts/${post.id}`);
+            } catch (err) {
+                this.showToast(err.message);
+            }
+        },
+        closePostDetail() {
+            this.selectedPost = null;
+        },
+        changePage(page) {
+            if (page < 1 || page > this.postPagination.total_pages) return;
+            this.loadPosts(page);
+        },
+        changeAlertPage(page) {
+            if (page < 1 || page > this.alertPagination.total_pages) return;
+            this.loadAlerts(page);
+        },
+        async loadTrends() {
+            this.wallTrends = await this.api(`/api/wall/analysis/trends?days=${this.trendDays}`);
+        },
+        async loadAlerts(page = this.alertPagination.page || 1) {
+            const params = new URLSearchParams();
+            params.set('page', page);
+            params.set('page_size', 3);
+            if (this.alertFilter) params.set('status', this.alertFilter);
+            const query = params.toString();
+            const data = await this.api(`/api/wall/analysis/alerts${query ? `?${query}` : ''}`);
+            if (Array.isArray(data)) {
+                this.wallAlerts = data;
+                this.alertPagination = {
+                    page: 1,
+                    page_size: data.length,
+                    total: data.length,
+                    total_pages: 1,
+                    has_prev: false,
+                    has_next: false
+                };
+                return;
+            }
+            this.wallAlerts = data.items || [];
+            this.alertPagination = data.pagination || this.alertPagination;
+        },
+        async handleAlert(alert) {
+            try {
+                await this.api(`/api/wall/analysis/alerts/${alert.id}/handle`, { method: 'POST' });
+                await Promise.all([this.loadAlerts(this.alertPagination.page), this.loadTrends()]);
+                this.showToast('告警已标记处理');
+            } catch (err) {
+                this.showToast(err.message);
+            }
+        },
+        resetPostFilters() {
+            this.postFilters = { keyword: '', author_type: '', status: '', risk_level: '' };
+            this.loadPosts(1);
+        },
+        isOwnPost(post) {
+            return post
+                && post.author_id === this.userInfo.user_id
+                && post.author_type === this.userInfo.user_type;
+        },
+        roleText(type) {
+            return { student: '学生', teacher: '教师', admin: '管理员' }[type] || '';
+        },
+        riskText(level) {
+            return level === 'high' ? '高风险' : '无风险';
+        },
+        riskShortText(level) {
+            return level === 'high' ? '高风险' : '无风险';
+        },
+        postStatusText(status) {
+            return status === 'deleted' ? '已删除' : '正常';
+        },
+        postStatusBadgeText(status) {
+            return status === 'deleted' ? '状态：已删除' : '状态：正常';
+        },
+        alertStatusText(status) {
+            return status === 'handled' ? '已处理' : '待处理';
+        },
+        alertLevelText(level) {
+            return level === 'critical' ? '重大' : '关注';
+        },
+        alertTypeText(type) {
+            return type === 'trend_spike' ? '趋势波动' : '关键词命中';
+        },
+        goMainService() {
+            const host = window.location.hostname || '127.0.0.1';
+            window.location.href = `${window.location.protocol}//${host}:5001`;
+        },
+        showToast(message) {
+            this.toast = message;
+            clearTimeout(this.toastTimer);
+            this.toastTimer = setTimeout(() => { this.toast = ''; }, 2600);
+        }
+    }
+}).mount('#app');
+</script>
+</body>
+</html>
