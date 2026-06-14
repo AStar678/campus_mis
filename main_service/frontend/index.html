@@ -147,6 +147,7 @@
                         { name: '校园墙', icon: '💬', port: 5005 },
                     ],
                     teacherServices: [
+                        { name: '选课排课', icon: '📚', port: 5004 },
                         { name: '课程管理', icon: '📖', port: 5002 },
                         { name: '成绩管理', icon: '✏️', port: 5002 },
                         { name: '课堂管理', icon: '🏫', port: 5003 },
@@ -246,7 +247,7 @@
                 },
                 clickService(service) {
                     if (!service.port) {
-                        this.showToast(`「${service.name}」服务暂未上线`);
+                        this.showToast(service.reason || `「${service.name}」服务暂未上线`);
                         return;
                     }
                     // 拼接分服务地址，带上 token 参数
