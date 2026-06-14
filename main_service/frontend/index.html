@@ -147,10 +147,11 @@
                         { name: '校园墙', icon: '💬', port: 5005 },
                     ],
                     teacherServices: [
-                        { name: '课程管理', icon: '📖', port: 5002 },
-                        { name: '成绩管理', icon: '✏️', port: 5002 },
-                        { name: '课堂管理', icon: '🏫', port: 5003 },
-                        { name: '校园墙', icon: '💬', port: 5005 },
+                        { name: '选课排课', icon: '📚', port: 5004 },
+                        { name: '课程管理', icon: '📖', port: 0, reason: '教务服务 5002 当前本地未接入' },
+                        { name: '成绩管理', icon: '✏️', port: 0, reason: '教务服务 5002 当前本地未接入' },
+                        { name: '课堂管理', icon: '🏫', port: 0, reason: '课堂服务 5003 当前本地未接入' },
+                        { name: '校园墙', icon: '💬', port: 0, reason: '校园墙服务 5005 当前本地未接入' },
                     ],
                     adminServices: [
                         { name: '选课管理', icon: '📚', port: 5004 },
@@ -246,7 +247,7 @@
                 },
                 clickService(service) {
                     if (!service.port) {
-                        this.showToast(`「${service.name}」服务暂未上线`);
+                        this.showToast(service.reason || `「${service.name}」服务暂未上线`);
                         return;
                     }
                     // 拼接分服务地址，带上 token 参数
