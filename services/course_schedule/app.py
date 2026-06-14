@@ -12,6 +12,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 import json
 import os
+import re
 
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
@@ -88,10 +89,33 @@ class Course(db.Model):
     course_name = db.Column(db.String(100), nullable=False)
     teacher_id = db.Column(db.String(20))
     capacity = db.Column(db.Integer, nullable=False, default=40)
+    credits = db.Column(db.Float, nullable=False, default=2.0)
     hours_per_week = db.Column(db.Integer, nullable=False, default=2)
     preferred_building = db.Column(db.String(50))
+    allowed_majors = db.Column(db.String(200), nullable=False, default="all")
+    allowed_grades = db.Column(db.String(100), nullable=False, default="all")
+    prerequisite_note = db.Column(db.String(300), nullable=False, default="无")
     status = db.Column(db.String(20), nullable=False, default="open")
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.now)
+
+
+class CourseSection(db.Model):
+    """课程教学班信息，同一门课程可由多个教师开设多个教学班。"""
+
+    __tablename__ = "cs_course_sections"
+
+    section_id = db.Column(db.String(30), primary_key=True)
+    course_id = db.Column(db.String(20), db.ForeignKey("cs_courses.course_id"), nullable=False, index=True)
+    section_name = db.Column(db.String(100), nullable=False)
+    teacher_id = db.Column(db.String(20))
+    capacity = db.Column(db.Integer, nullable=False, default=40)
+    preferred_building = db.Column(db.String(50))
+    required_room_type = db.Column(db.String(30), nullable=False, default="普通教室")
+    unavailable_slot_ids = db.Column(db.String(200), nullable=False, default="")
+    status = db.Column(db.String(20), nullable=False, default="open")
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.now)
+
+    course = db.relationship("Course", backref=db.backref("sections", lazy=True))
 
 
 class CourseRequest(db.Model):
@@ -105,11 +129,13 @@ class CourseRequest(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     student_id = db.Column(db.String(20), nullable=False, index=True)
     course_id = db.Column(db.String(20), db.ForeignKey("cs_courses.course_id"), nullable=False)
+    section_id = db.Column(db.String(30), db.ForeignKey("cs_course_sections.section_id"))
     preference_level = db.Column(db.Integer, nullable=False, default=1)
     status = db.Column(db.String(20), nullable=False, default="submitted")
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.now)
 
     course = db.relationship("Course")
+    section = db.relationship("CourseSection")
 
 
 class TimeSlot(db.Model):
@@ -144,6 +170,7 @@ class ScheduleResult(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     run_id = db.Column(db.Integer, db.ForeignKey("cs_schedule_runs.id"), nullable=False)
     course_id = db.Column(db.String(20), db.ForeignKey("cs_courses.course_id"), nullable=False)
+    section_id = db.Column(db.String(30), db.ForeignKey("cs_course_sections.section_id"))
     classroom_id = db.Column(db.String(4), nullable=False)
     slot_id = db.Column(db.Integer, db.ForeignKey("cs_time_slots.slot_id"), nullable=False)
     enrolled_count = db.Column(db.Integer, nullable=False, default=0)
@@ -153,53 +180,362 @@ class ScheduleResult(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.now)
 
     course = db.relationship("Course")
+    section = db.relationship("CourseSection")
     slot = db.relationship("TimeSlot")
 
 
-def serialize_course(course):
-    """将课程模型转换为前端接口返回结构。"""
+class SelectionBatch(db.Model):
+    """选课批次配置，用于后端控制提交、撤销、排课和发布阶段。"""
 
-    request_count = CourseRequest.query.filter_by(course_id=course.course_id).count()
+    __tablename__ = "cs_selection_batches"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    term_name = db.Column(db.String(80), nullable=False, default="2025-2026 学年第二学期")
+    phase = db.Column(db.String(30), nullable=False, default="selecting")
+    phase_label = db.Column(db.String(50), nullable=False, default="正式选课阶段")
+    start_at = db.Column(db.DateTime)
+    end_at = db.Column(db.DateTime)
+    max_preferences = db.Column(db.Integer, nullable=False, default=3)
+    min_credits = db.Column(db.Float, nullable=False, default=2.0)
+    max_credits = db.Column(db.Float, nullable=False, default=8.0)
+    notice = db.Column(db.String(300), nullable=False, default="排课结果以管理员发布为准。")
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+
+
+def split_rule_values(value):
+    """将逗号分隔的规则字段转换为集合，all 或空值表示不限制。"""
+
+    if not value or str(value).strip().lower() == "all":
+        return set()
+    return {item.strip() for item in str(value).replace("，", ",").split(",") if item.strip()}
+
+
+def parse_id_set(value):
+    """解析逗号分隔的整数 ID 集合。"""
+
+    if not value:
+        return set()
+    result = set()
+    for item in str(value).replace("，", ",").split(","):
+        item = item.strip()
+        if item.isdigit():
+            result.add(int(item))
+    return result
+
+
+def infer_classroom_type(classroom):
+    """根据教室楼栋和编号推断演示用教室类型。"""
+
+    text = f"{classroom.classroom_id or ''} {classroom.building or ''}"
+    if "体育" in text:
+        return "体育场馆"
+    if "实验" in text:
+        return "实验室"
+    if "机房" in text or "计算机" in text:
+        return "机房"
+    return "普通教室"
+
+
+def active_request_statuses():
+    """当前仍计入选课方案的申请状态。"""
+
+    return ["submitted", "scheduled", "waitlisted"]
+
+
+def calculate_student_credits(student_id, replacing_course_id=None, additional_course=None):
+    """计算学生当前有效意向学分，可排除待更新课程并追加新课程。"""
+
+    query = CourseRequest.query.filter(
+        CourseRequest.student_id == student_id,
+        CourseRequest.status.in_(active_request_statuses()),
+    )
+    if replacing_course_id:
+        query = query.filter(CourseRequest.course_id != replacing_course_id)
+    total = 0.0
+    for course_request in query.all():
+        if course_request.course:
+            total += float(course_request.course.credits or 0)
+    if additional_course:
+        total += float(additional_course.credits or 0)
+    return total
+
+
+def waitlist_info(course_request):
+    """计算候补排名和候补总人数。"""
+
+    if course_request.status != "waitlisted" or not course_request.section_id:
+        return {"rank": None, "total": 0}
+    ordered_requests = (
+        CourseRequest.query.filter(
+            CourseRequest.section_id == course_request.section_id,
+            CourseRequest.status.in_(active_request_statuses()),
+        )
+        .order_by(CourseRequest.preference_level.asc(), CourseRequest.created_at.asc(), CourseRequest.id.asc())
+        .all()
+    )
+    capacity = course_request.section.capacity if course_request.section else 0
+    waitlisted_requests = ordered_requests[capacity:]
+    ids = [item.id for item in waitlisted_requests]
+    rank = ids.index(course_request.id) + 1 if course_request.id in ids else None
+    return {"rank": rank, "total": len(waitlisted_requests)}
+
+
+def get_student_profile(student_id):
+    """构造演示用学生画像。
+
+    真实系统应从学生信息表读取专业、年级和行政班；当前根据学号生成稳定演示数据。
+    """
+
+    year = str(student_id)[:4] if student_id else "2024"
+    majors = ["软件工程", "计算机科学与技术", "数据科学与大数据技术", "人工智能"]
+    index = int(str(student_id)[-1]) % len(majors) if str(student_id)[-1:].isdigit() else 0
+    return {
+        "student_id": student_id,
+        "grade": year,
+        "major": majors[index],
+        "class_name": f"{year}级{majors[index]}{index + 1}班",
+    }
+
+
+def check_course_eligibility(course, student_id):
+    """检查学生是否符合课程适用专业和年级规则。"""
+
+    profile = get_student_profile(student_id)
+    allowed_majors = split_rule_values(course.allowed_majors)
+    allowed_grades = split_rule_values(course.allowed_grades)
+    if allowed_majors and profile["major"] not in allowed_majors:
+        return False, f"该课程仅限 {course.allowed_majors} 专业选择，当前专业为 {profile['major']}"
+    if allowed_grades and profile["grade"] not in allowed_grades:
+        return False, f"该课程仅限 {course.allowed_grades} 级学生选择，当前年级为 {profile['grade']}"
+    return True, "符合培养方案范围"
+
+
+def course_category(course):
+    """判断课程类别，用于生成统一展示编号。"""
+
+    code = str(course.course_id or "").upper()
+    name = str(course.course_name or "")
+    required_keywords = (
+        "必修",
+        "基础",
+        "高等数学",
+        "大学物理",
+        "程序设计",
+        "面向对象",
+        "数字逻辑",
+        "微机原理",
+        "信号与系统",
+        "通信原理",
+    )
+    if code.startswith("PUB") or any(keyword in name for keyword in ("公共", "体育", "英语", "思政")):
+        return "PUB"
+    if code.startswith("REQ") or any(keyword in name for keyword in required_keywords):
+        return "REQ"
+    return "ELE"
+
+
+def normalized_course_code(course):
+    """生成统一教务展示编号，不改变数据库内部主键。"""
+
+    digits = "".join(re.findall(r"\d+", str(course.course_id or "")))
+    numeric_part = digits[-3:].zfill(3) if digits else "000"
+    return f"{course_category(course)}{numeric_part}"
+
+
+def parse_datetime_value(value):
+    """解析前端传入的批次时间。"""
+
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value
+    normalized = str(value).replace("T", " ").strip()
+    for pattern in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return datetime.strptime(normalized, pattern)
+        except ValueError:
+            continue
+    raise ValueError("时间格式应为 YYYY-MM-DD HH:MM")
+
+
+def get_active_batch():
+    """获取当前生效批次，若不存在则创建默认批次。"""
+
+    batch = SelectionBatch.query.filter_by(is_active=True).order_by(SelectionBatch.id.desc()).first()
+    if batch:
+        return batch
+    batch = SelectionBatch(
+        term_name="2025-2026 学年第二学期",
+        phase="selecting",
+        phase_label="正式选课阶段",
+        start_at=datetime(2026, 6, 1, 9, 0),
+        end_at=datetime(2026, 6, 20, 18, 0),
+        max_preferences=3,
+        min_credits=2,
+        max_credits=8,
+        notice="排课结果以管理员发布为准。",
+        is_active=True,
+    )
+    db.session.add(batch)
+    db.session.commit()
+    return batch
+
+
+def serialize_batch(batch):
+    """将选课批次转换为前端配置结构。"""
+
+    now = datetime.now()
+    phase_rules = {
+        "preselect": {"submit": True, "cancel": True, "schedule": False, "publish": False},
+        "selecting": {"submit": True, "cancel": True, "schedule": False, "publish": False},
+        "scheduling": {"submit": False, "cancel": False, "schedule": True, "publish": False},
+        "add_drop": {"submit": True, "cancel": True, "schedule": True, "publish": False},
+        "final": {"submit": False, "cancel": False, "schedule": False, "publish": True},
+        "closed": {"submit": False, "cancel": False, "schedule": False, "publish": False},
+    }
+    in_time_window = True
+    if batch.start_at and now < batch.start_at:
+        in_time_window = False
+    if batch.end_at and now > batch.end_at:
+        in_time_window = False
+    rules = phase_rules.get(batch.phase, phase_rules["selecting"])
+    return {
+        "termName": batch.term_name,
+        "phase": batch.phase,
+        "phaseLabel": batch.phase_label,
+        "startAt": batch.start_at.strftime("%Y-%m-%d %H:%M") if batch.start_at else "",
+        "endAt": batch.end_at.strftime("%Y-%m-%d %H:%M") if batch.end_at else "",
+        "maxPreferences": batch.max_preferences,
+        "minCredits": batch.min_credits,
+        "maxCredits": batch.max_credits,
+        "notice": batch.notice,
+        "inTimeWindow": in_time_window,
+        "canSubmit": rules["submit"] and in_time_window,
+        "canCancel": rules["cancel"] and in_time_window,
+        "canSchedule": rules["schedule"],
+        "canPublish": rules["publish"],
+    }
+
+
+def ensure_batch_action(action):
+    """检查当前批次是否允许执行指定操作。"""
+
+    batch_data = serialize_batch(get_active_batch())
+    action_map = {
+        "submit": "canSubmit",
+        "cancel": "canCancel",
+        "schedule": "canSchedule",
+        "publish": "canPublish",
+    }
+    if not batch_data.get(action_map[action]):
+        action_tips = {
+            "submit": "请切换到预选/意向征集、正式选课或补退选阶段后再提交。",
+            "cancel": "请切换到预选/意向征集、正式选课或补退选阶段后再撤销。",
+            "schedule": "请在管理员端“批次设置”切换到排课处理阶段或补退选阶段后再生成排课方案。",
+            "publish": "请在管理员端“批次设置”切换到最终确认阶段后再发布排课结果。",
+        }
+        return False, f"当前批次为 {batch_data['phaseLabel']}，暂不允许该操作。{action_tips.get(action, '')}"
+    return True, ""
+
+
+def serialize_section(section):
+    """将教学班模型转换为前端接口返回结构。"""
+
     active_request_count = CourseRequest.query.filter(
-        CourseRequest.course_id == course.course_id,
-        CourseRequest.status.in_(["submitted", "scheduled"]),
+        CourseRequest.section_id == section.section_id,
+        CourseRequest.status.in_(["submitted", "scheduled", "waitlisted"]),
     ).count()
     status_label_map = {
         "open": "开放选课",
         "closed": "停止选课",
     }
     return {
+        "section_id": section.section_id,
+        "course_id": section.course_id,
+        "course_code": normalized_course_code(section.course) if section.course else section.course_id,
+        "section_name": section.section_name,
+        "teacher_id": section.teacher_id,
+        "capacity": section.capacity,
+        "preferred_building": section.preferred_building,
+        "required_room_type": section.required_room_type,
+        "unavailable_slot_ids": section.unavailable_slot_ids,
+        "unavailable_slot_id_list": sorted(parse_id_set(section.unavailable_slot_ids)),
+        "status": section.status,
+        "status_label": status_label_map.get(section.status, section.status),
+        "active_request_count": active_request_count,
+        "remaining_capacity": max(section.capacity - active_request_count, 0),
+    }
+
+
+def serialize_course(course):
+    """将课程模型转换为前端接口返回结构。"""
+
+    sections = CourseSection.query.filter_by(course_id=course.course_id).order_by(CourseSection.section_id).all()
+    serialized_sections = [serialize_section(section) for section in sections]
+    request_count = CourseRequest.query.filter(
+        CourseRequest.course_id == course.course_id,
+        CourseRequest.status != "cancelled",
+    ).count()
+    active_request_count = CourseRequest.query.filter(
+        CourseRequest.course_id == course.course_id,
+        CourseRequest.status.in_(["submitted", "scheduled", "waitlisted"]),
+    ).count()
+    status_label_map = {
+        "open": "开放选课",
+        "closed": "停止选课",
+    }
+    total_capacity = sum(item["capacity"] for item in serialized_sections) if serialized_sections else course.capacity
+    total_remaining = sum(item["remaining_capacity"] for item in serialized_sections) if serialized_sections else max(course.capacity - active_request_count, 0)
+    return {
         "course_id": course.course_id,
+        "course_code": normalized_course_code(course),
         "course_name": course.course_name,
         "teacher_id": course.teacher_id,
-        "capacity": course.capacity,
+        "capacity": total_capacity,
+        "base_capacity": course.capacity,
+        "credits": course.credits,
         "hours_per_week": course.hours_per_week,
         "preferred_building": course.preferred_building,
+        "allowed_majors": course.allowed_majors,
+        "allowed_grades": course.allowed_grades,
+        "prerequisite_note": course.prerequisite_note,
         "status": course.status,
         "status_label": status_label_map.get(course.status, course.status),
         "request_count": request_count,
         "active_request_count": active_request_count,
-        "remaining_capacity": max(course.capacity - active_request_count, 0),
+        "remaining_capacity": total_remaining,
+        "section_count": len(serialized_sections),
+        "open_section_count": len([item for item in serialized_sections if item["status"] == "open"]),
+        "sections": serialized_sections,
     }
 
 
 def serialize_request(course_request):
     """将选课申请模型转换为前端接口返回结构。"""
 
+    waitlist = waitlist_info(course_request)
     status_label_map = {
         "submitted": "已提交",
         "scheduled": "已排课",
+        "waitlisted": "候补中",
         "cancelled": "已撤销",
     }
     return {
         "id": course_request.id,
         "student_id": course_request.student_id,
         "course_id": course_request.course_id,
+        "course_code": normalized_course_code(course_request.course) if course_request.course else course_request.course_id,
         "course_name": course_request.course.course_name if course_request.course else None,
+        "section_id": course_request.section_id,
+        "section_name": course_request.section.section_name if course_request.section else None,
+        "section_teacher_id": course_request.section.teacher_id if course_request.section else None,
         "preference_level": course_request.preference_level,
         "preference_label": f"第 {course_request.preference_level} 意向",
         "status": course_request.status,
         "status_label": status_label_map.get(course_request.status, course_request.status),
+        "waitlist_rank": waitlist["rank"],
+        "waitlist_total": waitlist["total"],
         "created_at": course_request.created_at.isoformat(),
     }
 
@@ -213,6 +549,16 @@ def serialize_slot(slot):
         "start_time": slot.start_time,
         "end_time": slot.end_time,
         "label": slot.label,
+    }
+
+
+def serialize_classroom(classroom):
+    """将教室模型转换为前端接口返回结构。"""
+
+    return {
+        "classroom_id": classroom.classroom_id,
+        "building": classroom.building,
+        "room_type": infer_classroom_type(classroom),
     }
 
 
@@ -245,7 +591,11 @@ def serialize_result(result):
         "id": result.id,
         "run_id": result.run_id,
         "course_id": result.course_id,
+        "course_code": normalized_course_code(result.course) if result.course else result.course_id,
         "course_name": result.course.course_name if result.course else None,
+        "section_id": result.section_id,
+        "section_name": result.section.section_name if result.section else None,
+        "section_teacher_id": result.section.teacher_id if result.section else None,
         "classroom_id": result.classroom_id,
         "slot_id": result.slot_id,
         "weekday": weekday,
@@ -342,20 +692,37 @@ def get_distance_between_buildings(building_name_a, building_name_b):
     return adjacency.distance if adjacency else 300
 
 
-def score_assignment(course, classroom, slot, request_count, used_pairs):
+def score_assignment(target, classroom, slot, request_count, used_pairs, used_teacher_slots, used_student_slots, student_ids):
     """为单个课程、教室、时间段候选组合计算排课评分。"""
 
-    capacity_gap = course.capacity - request_count
+    capacity_gap = target.capacity - request_count
     capacity_score = 40 if capacity_gap >= 0 else max(0, 40 + capacity_gap * 2)
-    demand_score = min(request_count, course.capacity) * 1.5
-    distance = get_distance_between_buildings(course.preferred_building, classroom.building)
+    demand_score = min(request_count, target.capacity) * 1.5
+    distance = get_distance_between_buildings(target.preferred_building, classroom.building)
     distance_penalty = distance / 20
-    conflict_penalty = 60 if (classroom.classroom_id, slot.slot_id) in used_pairs else 0
-    score = capacity_score + demand_score - distance_penalty - conflict_penalty
+    classroom_type = infer_classroom_type(classroom)
+    room_type_penalty = 0 if target.required_room_type in ("", "普通教室", classroom_type) else 120
+    unavailable_penalty = 120 if slot.slot_id in parse_id_set(target.unavailable_slot_ids) else 0
+    classroom_conflict_penalty = 80 if (classroom.classroom_id, slot.slot_id) in used_pairs else 0
+    teacher_conflict_penalty = 80 if target.teacher_id and (target.teacher_id, slot.slot_id) in used_teacher_slots else 0
+    student_conflict_count = len(set(student_ids) & used_student_slots.get(slot.slot_id, set()))
+    student_conflict_penalty = student_conflict_count * 12
+    score = (
+        capacity_score
+        + demand_score
+        - distance_penalty
+        - room_type_penalty
+        - unavailable_penalty
+        - classroom_conflict_penalty
+        - teacher_conflict_penalty
+        - student_conflict_penalty
+    )
     reason = (
-        f"选课人数 {request_count}，教室容量参考 {course.capacity}；"
-        f"课程偏好楼栋 {course.preferred_building or '未设置'}，"
-        f"分配教室楼栋 {classroom.building}，距离惩罚 {round(distance_penalty, 1)}。"
+        f"选课人数 {request_count}，教学班容量 {target.capacity}；"
+        f"教学班偏好楼栋 {target.preferred_building or '未设置'}，"
+        f"分配教室楼栋 {classroom.building}，教室类型 {classroom_type}；"
+        f"类型惩罚 {room_type_penalty}，不可用时间惩罚 {unavailable_penalty}，"
+        f"教师冲突惩罚 {teacher_conflict_penalty}，学生冲突 {student_conflict_count} 人。"
     )
     return score, reason
 
@@ -367,31 +734,52 @@ def run_schedule_agent(run_by):
     后续接入真正的智能 Agent 时，可复用本函数的输入输出结构。
     """
 
-    courses = Course.query.filter_by(status="open").all()
+    sections = (
+        CourseSection.query.join(Course)
+        .filter(Course.status == "open", CourseSection.status == "open")
+        .order_by(CourseSection.course_id, CourseSection.section_id)
+        .all()
+    )
     classrooms = Classroom.query.all()
     slots = TimeSlot.query.all()
-    if not courses or not classrooms or not slots:
-        return None, "缺少课程、教室或时间段数据，无法排课"
+    if not sections or not classrooms or not slots:
+        return None, "缺少教学班、教室或时间段数据，无法排课"
 
     ScheduleResult.query.delete()
     used_pairs = set()
+    used_teacher_slots = set()
+    used_student_slots = {}
     results = []
 
     run = ScheduleRun(run_by=run_by, status="running", summary="智能排课任务运行中")
     db.session.add(run)
     db.session.flush()
 
-    for course in courses:
-        requests_for_course = CourseRequest.query.filter(
-            CourseRequest.course_id == course.course_id,
-            CourseRequest.status.in_(["submitted", "scheduled"]),
-        ).all()
-        request_count = len(requests_for_course)
+    for section in sections:
+        requests_for_section = CourseRequest.query.filter(
+            CourseRequest.section_id == section.section_id,
+            CourseRequest.status.in_(["submitted", "scheduled", "waitlisted"]),
+        ).order_by(CourseRequest.preference_level.asc(), CourseRequest.created_at.asc(), CourseRequest.id.asc()).all()
+        request_count = len(requests_for_section)
+        if not request_count:
+            continue
+        accepted_requests = requests_for_section[: section.capacity]
+        waitlisted_requests = requests_for_section[section.capacity :]
+        student_ids = [course_request.student_id for course_request in accepted_requests]
         best = None
 
         for classroom in classrooms:
             for slot in slots:
-                score, reason = score_assignment(course, classroom, slot, request_count, used_pairs)
+                score, reason = score_assignment(
+                    section,
+                    classroom,
+                    slot,
+                    request_count,
+                    used_pairs,
+                    used_teacher_slots,
+                    used_student_slots,
+                    student_ids,
+                )
                 if best is None or score > best["score"]:
                     best = {
                         "classroom": classroom,
@@ -404,15 +792,21 @@ def run_schedule_agent(run_by):
             continue
 
         used_pairs.add((best["classroom"].classroom_id, best["slot"].slot_id))
-        for course_request in requests_for_course[: course.capacity]:
+        if section.teacher_id:
+            used_teacher_slots.add((section.teacher_id, best["slot"].slot_id))
+        used_student_slots.setdefault(best["slot"].slot_id, set()).update(student_ids)
+        for course_request in accepted_requests:
             course_request.status = "scheduled"
+        for course_request in waitlisted_requests:
+            course_request.status = "waitlisted"
 
         result = ScheduleResult(
             run_id=run.id,
-            course_id=course.course_id,
+            course_id=section.course_id,
+            section_id=section.section_id,
             classroom_id=best["classroom"].classroom_id,
             slot_id=best["slot"].slot_id,
-            enrolled_count=min(request_count, course.capacity),
+            enrolled_count=min(request_count, section.capacity),
             score=round(best["score"], 2),
             reason=best["reason"],
         )
@@ -420,7 +814,7 @@ def run_schedule_agent(run_by):
         results.append(result)
 
     run.status = "completed"
-    run.summary = f"完成 {len(results)} 门课程排课"
+    run.summary = f"完成 {len(results)} 个教学班排课"
     db.session.commit()
     return run, None
 
@@ -449,8 +843,69 @@ def health_check():
     return jsonify({"status": "ok", "service": "course-schedule-service", "port": 5004})
 
 
+@app.route("/api/course-schedule/settings", methods=["GET"])
+@require_auth("student", "admin", "teacher")
+def get_selection_settings(_user):
+    """查询当前选课批次设置。"""
+
+    return jsonify({"success": True, "data": serialize_batch(get_active_batch())})
+
+
+@app.route("/api/course-schedule/settings", methods=["PUT"])
+@require_auth("admin")
+def update_selection_settings(_user):
+    """更新当前选课批次设置，仅管理员可访问。"""
+
+    data = request.get_json() or {}
+    batch = get_active_batch()
+    try:
+        start_at = parse_datetime_value(data.get("startAt", batch.start_at))
+        end_at = parse_datetime_value(data.get("endAt", batch.end_at))
+        max_preferences = parse_positive_int(data.get("maxPreferences"), "maxPreferences", batch.max_preferences)
+        min_credits = float(data.get("minCredits", batch.min_credits))
+        max_credits = float(data.get("maxCredits", batch.max_credits))
+    except ValueError as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
+    if start_at and end_at and start_at >= end_at:
+        return jsonify({"success": False, "message": "选课开始时间必须早于结束时间"}), 400
+    if min_credits < 0 or max_credits <= 0 or min_credits > max_credits:
+        return jsonify({"success": False, "message": "学分下限不能大于上限，且上限必须大于 0"}), 400
+
+    phase = data.get("phase", batch.phase)
+    phase_labels = {
+        "preselect": "预选/意向征集",
+        "selecting": "正式选课阶段",
+        "scheduling": "排课处理阶段",
+        "add_drop": "补退选阶段",
+        "final": "管理员最终确认",
+        "closed": "选课关闭",
+    }
+    if phase not in phase_labels:
+        return jsonify({"success": False, "message": "未知选课阶段"}), 400
+
+    batch.term_name = data.get("termName", batch.term_name)
+    batch.phase = phase
+    batch.phase_label = data.get("phaseLabel") or phase_labels[phase]
+    batch.start_at = start_at
+    batch.end_at = end_at
+    batch.max_preferences = max_preferences
+    batch.min_credits = min_credits
+    batch.max_credits = max_credits
+    batch.notice = data.get("notice", batch.notice)
+    db.session.commit()
+    return jsonify({"success": True, "data": serialize_batch(batch)})
+
+
+@app.route("/api/course-schedule/student-profile", methods=["GET"])
+@require_auth("student")
+def current_student_profile(user):
+    """查询当前学生的演示培养方案画像。"""
+
+    return jsonify({"success": True, "data": get_student_profile(user["user_id"])})
+
+
 @app.route("/api/course-schedule/courses", methods=["GET"])
-@require_auth("student", "admin")
+@require_auth("student", "admin", "teacher")
 def list_courses(_user):
     """查询可选课程列表，学生和管理员可访问。"""
 
@@ -473,19 +928,38 @@ def create_course(_user):
     try:
         capacity = parse_positive_int(data.get("capacity"), "capacity", 40)
         hours_per_week = parse_positive_int(data.get("hours_per_week"), "hours_per_week", 2)
+        credits = float(data.get("credits", hours_per_week))
     except ValueError as exc:
         return jsonify({"success": False, "message": str(exc)}), 400
+    if credits <= 0:
+        return jsonify({"success": False, "message": "credits must be positive"}), 400
 
     course = Course(
         course_id=data["course_id"],
         course_name=data["course_name"],
         teacher_id=data.get("teacher_id"),
         capacity=capacity,
+        credits=credits,
         hours_per_week=hours_per_week,
         preferred_building=data.get("preferred_building"),
+        allowed_majors=data.get("allowed_majors") or "all",
+        allowed_grades=data.get("allowed_grades") or "all",
+        prerequisite_note=data.get("prerequisite_note") or "无",
         status=data.get("status", "open"),
     )
     db.session.add(course)
+    default_section = CourseSection(
+        section_id=f"{data['course_id']}-01",
+        course_id=data["course_id"],
+        section_name=f"{data['course_name']} 01班",
+        teacher_id=data.get("teacher_id"),
+        capacity=capacity,
+        preferred_building=data.get("preferred_building"),
+        required_room_type=data.get("required_room_type") or "普通教室",
+        unavailable_slot_ids=data.get("unavailable_slot_ids") or "",
+        status=data.get("status", "open"),
+    )
+    db.session.add(default_section)
     db.session.commit()
     return jsonify({"success": True, "data": serialize_course(course)}), 201
 
@@ -507,17 +981,136 @@ def update_course(_user, course_id):
             "hours_per_week",
             course.hours_per_week,
         )
+        credits = float(data.get("credits", course.credits))
     except ValueError as exc:
         return jsonify({"success": False, "message": str(exc)}), 400
+    if credits <= 0:
+        return jsonify({"success": False, "message": "credits must be positive"}), 400
 
     course.course_name = data.get("course_name", course.course_name)
     course.teacher_id = data.get("teacher_id", course.teacher_id)
     course.capacity = capacity
+    course.credits = credits
     course.hours_per_week = hours_per_week
     course.preferred_building = data.get("preferred_building", course.preferred_building)
+    course.allowed_majors = data.get("allowed_majors", course.allowed_majors) or "all"
+    course.allowed_grades = data.get("allowed_grades", course.allowed_grades) or "all"
+    course.prerequisite_note = data.get("prerequisite_note", course.prerequisite_note) or "无"
     course.status = data.get("status", course.status)
+
+    sections = (
+        CourseSection.query.filter_by(course_id=course_id)
+        .order_by(CourseSection.section_id.asc())
+        .all()
+    )
+    if not sections:
+        db.session.add(
+            CourseSection(
+                section_id=f"{course.course_id}-01",
+                course_id=course.course_id,
+                section_name=f"{course.course_name} 01班",
+                teacher_id=course.teacher_id,
+                capacity=course.capacity,
+                preferred_building=course.preferred_building,
+                required_room_type=data.get("required_room_type") or "普通教室",
+                unavailable_slot_ids=data.get("unavailable_slot_ids") or "",
+                status=course.status,
+            )
+        )
+    elif len(sections) == 1:
+        sections[0].section_name = f"{course.course_name} 01班"
+        sections[0].teacher_id = course.teacher_id
+        sections[0].capacity = course.capacity
+        sections[0].preferred_building = course.preferred_building
+        sections[0].required_room_type = data.get("required_room_type", sections[0].required_room_type) or "普通教室"
+        sections[0].unavailable_slot_ids = data.get("unavailable_slot_ids", sections[0].unavailable_slot_ids) or ""
+        sections[0].status = course.status
+
     db.session.commit()
     return jsonify({"success": True, "data": serialize_course(course)})
+
+
+@app.route("/api/course-schedule/courses/<course_id>/sections", methods=["POST"])
+@require_auth("admin")
+def create_course_section(_user, course_id):
+    """新增课程教学班，仅管理员可访问。"""
+
+    course = db.session.get(Course, course_id)
+    if not course:
+        return jsonify({"success": False, "message": "课程不存在"}), 404
+
+    data = request.get_json() or {}
+    if not data.get("section_name"):
+        return jsonify({"success": False, "message": "section_name 必填"}), 400
+    try:
+        capacity = parse_positive_int(data.get("capacity"), "capacity", course.capacity)
+    except ValueError as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
+
+    section_count = CourseSection.query.filter_by(course_id=course_id).count()
+    section_id = data.get("section_id") or f"{course_id}-{section_count + 1:02d}"
+    if db.session.get(CourseSection, section_id):
+        return jsonify({"success": False, "message": "教学班编号已存在"}), 409
+
+    section = CourseSection(
+        section_id=section_id,
+        course_id=course_id,
+        section_name=data["section_name"],
+        teacher_id=data.get("teacher_id"),
+        capacity=capacity,
+        preferred_building=data.get("preferred_building"),
+        required_room_type=data.get("required_room_type") or "普通教室",
+        unavailable_slot_ids=data.get("unavailable_slot_ids") or "",
+        status=data.get("status", "open"),
+    )
+    db.session.add(section)
+    db.session.commit()
+    return jsonify({"success": True, "data": serialize_section(section)}), 201
+
+
+@app.route("/api/course-schedule/sections/<section_id>", methods=["PUT"])
+@require_auth("admin")
+def update_course_section(_user, section_id):
+    """更新课程教学班，仅管理员可访问。"""
+
+    section = db.session.get(CourseSection, section_id)
+    if not section:
+        return jsonify({"success": False, "message": "教学班不存在"}), 404
+
+    data = request.get_json() or {}
+    try:
+        capacity = parse_positive_int(data.get("capacity"), "capacity", section.capacity)
+    except ValueError as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
+
+    section.section_name = data.get("section_name", section.section_name)
+    section.teacher_id = data.get("teacher_id", section.teacher_id)
+    section.capacity = capacity
+    section.preferred_building = data.get("preferred_building", section.preferred_building)
+    section.required_room_type = data.get("required_room_type", section.required_room_type) or "普通教室"
+    section.unavailable_slot_ids = data.get("unavailable_slot_ids", section.unavailable_slot_ids) or ""
+    section.status = data.get("status", section.status)
+    db.session.commit()
+    return jsonify({"success": True, "data": serialize_section(section)})
+
+
+@app.route("/api/course-schedule/sections/<section_id>", methods=["DELETE"])
+@require_auth("admin")
+def delete_course_section(_user, section_id):
+    """删除未被使用的课程教学班，仅管理员可访问。"""
+
+    section = db.session.get(CourseSection, section_id)
+    if not section:
+        return jsonify({"success": False, "message": "教学班不存在"}), 404
+
+    has_requests = CourseRequest.query.filter_by(section_id=section_id).first()
+    has_results = ScheduleResult.query.filter_by(section_id=section_id).first()
+    if has_requests or has_results:
+        return jsonify({"success": False, "message": "教学班已有选课申请或排课结果，请改为停止选课"}), 400
+
+    db.session.delete(section)
+    db.session.commit()
+    return jsonify({"success": True, "message": "教学班已删除"})
 
 
 @app.route("/api/course-schedule/courses/<course_id>", methods=["DELETE"])
@@ -529,20 +1122,30 @@ def delete_course(_user, course_id):
     if not course:
         return jsonify({"success": False, "message": "课程不存在"}), 404
 
-    CourseRequest.query.filter_by(course_id=course_id).delete()
     ScheduleResult.query.filter_by(course_id=course_id).delete()
+    CourseRequest.query.filter_by(course_id=course_id).delete()
+    CourseSection.query.filter_by(course_id=course_id).delete()
     db.session.delete(course)
     db.session.commit()
     return jsonify({"success": True, "message": "课程已删除"})
 
 
 @app.route("/api/course-schedule/time-slots", methods=["GET"])
-@require_auth("student", "admin")
+@require_auth("student", "admin", "teacher")
 def list_time_slots(_user):
     """查询候选排课时间段。"""
 
     slots = TimeSlot.query.order_by(TimeSlot.weekday, TimeSlot.start_time).all()
     return jsonify({"success": True, "data": [serialize_slot(slot) for slot in slots]})
+
+
+@app.route("/api/course-schedule/classrooms", methods=["GET"])
+@require_auth("admin")
+def list_classrooms(_user):
+    """查询可用于排课的教室列表，仅管理员可访问。"""
+
+    classrooms = Classroom.query.order_by(Classroom.classroom_id).all()
+    return jsonify({"success": True, "data": [serialize_classroom(classroom) for classroom in classrooms]})
 
 
 @app.route("/api/course-schedule/time-slots", methods=["POST"])
@@ -578,6 +1181,10 @@ def create_time_slot(_user):
 def submit_course_request(user):
     """提交或更新当前学生的选课申请。"""
 
+    allowed, message = ensure_batch_action("submit")
+    if not allowed:
+        return jsonify({"success": False, "message": message}), 400
+
     data = request.get_json() or {}
     course_id = data.get("course_id")
     if not course_id:
@@ -587,12 +1194,39 @@ def submit_course_request(user):
         return jsonify({"success": False, "message": "课程不存在"}), 404
     if course.status != "open":
         return jsonify({"success": False, "message": "当前课程未开放选课"}), 400
+    if course_id.upper().startswith("REQ") or "必修" in course.course_name or "基础" in course.course_name:
+        return jsonify({"success": False, "message": "必修课由培养方案保障，不需要提交选课意向"}), 400
+    eligible, eligibility_message = check_course_eligibility(course, user["user_id"])
+    if not eligible:
+        return jsonify({"success": False, "message": eligibility_message}), 400
+
+    section_id = data.get("section_id")
+    if not section_id:
+        return jsonify({"success": False, "message": "请选择具体教学班"}), 400
+    section = db.session.get(CourseSection, section_id)
+    if not section or section.course_id != course_id:
+        return jsonify({"success": False, "message": "教学班不存在或不属于当前课程"}), 404
+    if section.status != "open":
+        return jsonify({"success": False, "message": "当前教学班未开放选课"}), 400
+
     try:
         preference_level = int(data.get("preference_level", 1))
     except (TypeError, ValueError):
         return jsonify({"success": False, "message": "意向级别必须是数字"}), 400
     if preference_level not in (1, 2, 3):
         return jsonify({"success": False, "message": "意向级别只能是 1、2 或 3"}), 400
+
+    batch = get_active_batch()
+    planned_credits = calculate_student_credits(
+        user["user_id"],
+        replacing_course_id=course_id,
+        additional_course=course,
+    )
+    if planned_credits > float(batch.max_credits):
+        return jsonify({
+            "success": False,
+            "message": f"提交后意向学分为 {planned_credits:g}，超过本批次上限 {batch.max_credits:g} 学分",
+        }), 400
 
     existing = CourseRequest.query.filter_by(
         student_id=user["user_id"],
@@ -601,11 +1235,13 @@ def submit_course_request(user):
     preference_conflict = CourseRequest.query.filter(
         CourseRequest.student_id == user["user_id"],
         CourseRequest.preference_level == preference_level,
-        CourseRequest.status.in_(["submitted", "scheduled"]),
+        CourseRequest.status.in_(["submitted", "scheduled", "waitlisted"]),
         CourseRequest.course_id != course_id,
     ).first()
     if preference_conflict:
-        conflict_name = preference_conflict.course.course_name if preference_conflict.course else preference_conflict.course_id
+        conflict_name = preference_conflict.section.section_name if preference_conflict.section else (
+            preference_conflict.course.course_name if preference_conflict.course else preference_conflict.course_id
+        )
         return jsonify({
             "success": False,
             "message": f"{conflict_name} 已经是第 {preference_level} 意向，请先调整或撤销原意向",
@@ -614,6 +1250,7 @@ def submit_course_request(user):
     if existing:
         if existing.status == "scheduled":
             return jsonify({"success": False, "message": "已排课的申请不能修改意向"}), 400
+        existing.section_id = section_id
         existing.preference_level = preference_level
         existing.status = "submitted"
         db.session.commit()
@@ -622,6 +1259,7 @@ def submit_course_request(user):
     course_request = CourseRequest(
         student_id=user["user_id"],
         course_id=course_id,
+        section_id=section_id,
         preference_level=preference_level,
     )
     db.session.add(course_request)
@@ -633,6 +1271,10 @@ def submit_course_request(user):
 @require_auth("student")
 def cancel_course_request(user, request_id):
     """撤销当前学生尚未完成排课的选课申请。"""
+
+    allowed, message = ensure_batch_action("cancel")
+    if not allowed:
+        return jsonify({"success": False, "message": message}), 400
 
     course_request = db.session.get(CourseRequest, request_id)
     if not course_request or course_request.student_id != user["user_id"]:
@@ -673,6 +1315,55 @@ def list_all_requests(_user):
     })
 
 
+@app.route("/api/course-schedule/teacher/sections", methods=["GET"])
+@require_auth("teacher")
+def list_teacher_sections(user):
+    """查询当前教师负责的教学班。"""
+
+    sections = (
+        CourseSection.query.filter_by(teacher_id=user["user_id"])
+        .order_by(CourseSection.course_id, CourseSection.section_id)
+        .all()
+    )
+    return jsonify({"success": True, "data": [serialize_section(section) for section in sections]})
+
+
+@app.route("/api/course-schedule/teacher/requests", methods=["GET"])
+@require_auth("teacher")
+def list_teacher_requests(user):
+    """查询当前教师教学班下的学生选课申请。"""
+
+    section_ids = [
+        row[0]
+        for row in db.session.query(CourseSection.section_id)
+        .filter(CourseSection.teacher_id == user["user_id"])
+        .all()
+    ]
+    if not section_ids:
+        return jsonify({"success": True, "data": []})
+    requests_for_teacher = (
+        CourseRequest.query.filter(CourseRequest.section_id.in_(section_ids))
+        .order_by(CourseRequest.section_id, CourseRequest.preference_level, CourseRequest.created_at)
+        .all()
+    )
+    return jsonify({"success": True, "data": [serialize_request(course_request) for course_request in requests_for_teacher]})
+
+
+@app.route("/api/course-schedule/teacher/sections/<section_id>/availability", methods=["PUT"])
+@require_auth("teacher")
+def update_teacher_section_availability(user, section_id):
+    """教师维护自己教学班的不可用时间段。"""
+
+    section = db.session.get(CourseSection, section_id)
+    if not section or section.teacher_id != user["user_id"]:
+        return jsonify({"success": False, "message": "教学班不存在或不属于当前教师"}), 404
+
+    data = request.get_json() or {}
+    section.unavailable_slot_ids = data.get("unavailable_slot_ids", section.unavailable_slot_ids) or ""
+    db.session.commit()
+    return jsonify({"success": True, "data": serialize_section(section)})
+
+
 @app.route("/api/course-schedule/schedule-runs", methods=["GET"])
 @require_auth("admin")
 def list_schedule_runs(_user):
@@ -686,6 +1377,10 @@ def list_schedule_runs(_user):
 @require_auth("admin")
 def schedule_courses(user):
     """触发规则版智能排课，仅管理员可访问。"""
+
+    allowed, message = ensure_batch_action("schedule")
+    if not allowed:
+        return jsonify({"success": False, "message": message}), 400
 
     run, error = run_schedule_agent(user["user_id"])
     if error:
@@ -702,7 +1397,7 @@ def schedule_courses(user):
 
 
 @app.route("/api/course-schedule/results", methods=["GET"])
-@require_auth("student", "admin")
+@require_auth("student", "admin", "teacher")
 def list_results(user):
     """查询排课结果。
 
@@ -711,24 +1406,72 @@ def list_results(user):
 
     query = ScheduleResult.query
     if user["user_type"] == "student":
-        requested_course_ids = [
-            item.course_id
+        requested_section_ids = [
+            item.section_id
             for item in CourseRequest.query.filter(
                 CourseRequest.student_id == user["user_id"],
-                CourseRequest.status.in_(["submitted", "scheduled"]),
+                CourseRequest.status == "scheduled",
+                CourseRequest.section_id.isnot(None),
             ).all()
         ]
-        query = query.filter(ScheduleResult.course_id.in_(requested_course_ids))
+        query = query.filter(ScheduleResult.section_id.in_(requested_section_ids))
         query = query.filter_by(is_published=True)
+    elif user["user_type"] == "teacher":
+        teacher_section_ids = [
+            row[0]
+            for row in db.session.query(CourseSection.section_id)
+            .filter(CourseSection.teacher_id == user["user_id"])
+            .all()
+        ]
+        query = query.filter(ScheduleResult.section_id.in_(teacher_section_ids))
 
-    results = query.order_by(ScheduleResult.course_id).all()
+    results = query.order_by(ScheduleResult.course_id, ScheduleResult.section_id).all()
     return jsonify({"success": True, "data": [serialize_result(result) for result in results]})
+
+
+@app.route("/api/course-schedule/results/<int:result_id>", methods=["PUT"])
+@require_auth("admin")
+def update_schedule_result(_user, result_id):
+    """人工调整单条排课结果的教室和时间。"""
+
+    result = db.session.get(ScheduleResult, result_id)
+    if not result:
+        return jsonify({"success": False, "message": "排课结果不存在"}), 404
+
+    data = request.get_json() or {}
+    classroom_id = data.get("classroom_id")
+    slot_id = data.get("slot_id")
+    if not classroom_id or not slot_id:
+        return jsonify({"success": False, "message": "classroom_id 和 slot_id 必填"}), 400
+
+    classroom = db.session.get(Classroom, classroom_id)
+    slot = db.session.get(TimeSlot, slot_id)
+    if not classroom:
+        return jsonify({"success": False, "message": "教室不存在"}), 404
+    if not slot:
+        return jsonify({"success": False, "message": "时间段不存在"}), 404
+
+    result.classroom_id = classroom_id
+    result.slot_id = slot.slot_id
+    result.is_published = False
+    result.score = 0
+    result.reason = (
+        f"管理员人工调整：教室 {classroom_id}，"
+        f"时间 {slot.label or ''} {slot.start_time}-{slot.end_time}。"
+        "请在发布前重新检查教室、教师和学生时间冲突。"
+    )
+    db.session.commit()
+    return jsonify({"success": True, "data": serialize_result(result)})
 
 
 @app.route("/api/course-schedule/results/publish", methods=["POST"])
 @require_auth("admin")
 def publish_results(_user):
     """发布排课结果，发布后学生端可查看。"""
+
+    allowed, message = ensure_batch_action("publish")
+    if not allowed:
+        return jsonify({"success": False, "message": message}), 400
 
     updated = ScheduleResult.query.update({"is_published": True})
     db.session.commit()
