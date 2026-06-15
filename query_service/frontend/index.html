@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>综合信息查询系统</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { min-height: 100vh; background: #f4f6f8; color: #1f2933; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; }
+        button, input, select, textarea { font: inherit; }
+        button { cursor: pointer; border: 0; }
+
+        .top-bar { display: flex; justify-content: space-between; align-items: center; padding: 16px 28px; background: #fff; border-bottom: 1px solid #dce3ea; }
+        .brand h1 { font-size: 20px; color: #174f8c; }
+        .brand p { color: #617080; font-size: 13px; }
+        .user-chip { color: #617080; font-size: 13px; }
+
+        .workspace { width: min(1200px, 100%); margin: 0 auto; padding: 24px; display: grid; gap: 18px; }
+        .panel { background: #fff; border: 1px solid #dce3ea; border-radius: 8px; padding: 18px; }
+        .section-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+        .section-head h2 { font-size: 18px; }
+        .muted { color: #617080; font-size: 13px; }
+
+        .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+        .tab { color: #334e68; background: #dbe5ee; border-radius: 6px; padding: 8px 14px; font-size: 14px; }
+        .tab.active { color: #fff; background: #2364aa; }
+
+        .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 34px; border-radius: 6px; padding: 7px 14px; color: #fff; background: #2364aa; font-size: 14px; }
+        .btn:hover { background: #174f8c; }
+        .btn:disabled { background: #a8b3bf; cursor: not-allowed; }
+        .btn.secondary { color: #1f2933; background: #e7ecf1; }
+        .btn.success { background: #2f855a; }
+
+        .table-wrap { overflow-x: auto; border: 1px solid #dce3ea; border-radius: 8px; }
+        table { width: 100%; border-collapse: collapse; background: #fff; }
+        th, td { padding: 10px 12px; border-bottom: 1px solid #e7ecf1; text-align: left; font-size: 14px; }
+        th { color: #52616f; background: #f7f9fb; font-size: 13px; }
+        tr:last-child td { border-bottom: 0; }
+
+        .empty { padding: 28px; text-align: center; color: #617080; border: 1px dashed #b9c6d3; border-radius: 8px; background: #f8fafc; }
+        .pill { display: inline-flex; align-items: center; min-height: 22px; padding: 2px 8px; border-radius: 999px; background: #edf5ff; color: #174f8c; font-size: 12px; }
+        .pill.ok { background: #e8f5ee; color: #276749; }
+        .pill.warn { background: #fff4de; color: #946200; }
+
+        .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+        .stat { background: #fff; border: 1px solid #dce3ea; border-radius: 8px; padding: 14px; }
+        .stat strong { display: block; font-size: 24px; margin-top: 4px; }
+
+        /* Agent 聊天区 */
+        .agent-box { border: 1px solid #dce3ea; border-radius: 8px; background: #f8fafc; }
+        .chat-messages { max-height: 400px; overflow-y: auto; padding: 16px; display: grid; gap: 12px; }
+        .chat-msg { padding: 12px 16px; border-radius: 8px; max-width: 85%; line-height: 1.6; font-size: 14px; white-space: pre-wrap; word-break: break-word; }
+        .chat-msg.user { background: #2364aa; color: #fff; justify-self: end; }
+        .chat-msg.assistant { background: #fff; border: 1px solid #dce3ea; justify-self: start; }
+        .chat-msg.error { background: #fdecea; color: #a6332d; justify-self: start; }
+        .chat-input { display: flex; gap: 10px; padding: 14px; border-top: 1px solid #dce3ea; }
+        .chat-input input { flex: 1; border: 1px solid #cfd7df; border-radius: 6px; padding: 10px 12px; }
+        .chat-input input:focus { outline: none; border-color: #2364aa; }
+
+        .filter-bar { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+        .filter-input { border: 1px solid #cfd7df; border-radius: 6px; padding: 8px 10px; width: 150px; font-size: 13px; background: #fff; }
+        .filter-input:focus { outline: none; border-color: #2364aa; }
+
+        .toast { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); z-index: 20; color: #fff; background: #1f2933; padding: 10px 18px; border-radius: 6px; }
+
+        .schedule-grid { display: grid; grid-template-columns: 80px repeat(5, 1fr); border: 1px solid #dce3ea; border-radius: 8px; overflow: hidden; }
+        .schedule-cell { min-height: 60px; padding: 8px; border-right: 1px solid #e7ecf1; border-bottom: 1px solid #e7ecf1; background: #fff; font-size: 12px; }
+        .schedule-cell.header { background: #f7f9fb; font-weight: 700; text-align: center; min-height: auto; }
+        .schedule-item { padding: 6px; border-radius: 4px; background: #edf5ff; color: #174f8c; margin-bottom: 4px; line-height: 1.4; }
+
+        @media (max-width: 900px) {
+            .stats { grid-template-columns: repeat(2, 1fr); }
+            .schedule-grid { grid-template-columns: 60px repeat(5, 1fr); }
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="toast" v-if="toast">{{ toast }}</div>
+
+    <header class="top-bar">
+        <div class="brand">
+            <h1>综合信息查询系统</h1>
+            <p>学生成绩 · 课程表 · 教师课程 · 智能问答</p>
+        </div>
+        <div class="user-chip" v-if="user.user_id">{{ user.user_id }} · {{ roleLabel }}</div>
+    </header>
+
+    <main class="workspace">
+        <!-- 未登录 -->
+        <section class="panel" v-if="!token">
+            <div class="empty">缺少登录 token，请从主服务大厅进入查询系统。</div>
+        </section>
+
+        <!-- 加载中 -->
+        <section class="panel" v-else-if="loading">
+            <div class="empty">正在加载数据...</div>
+        </section>
+
+        <!-- 错误 -->
+        <section class="panel" v-else-if="errorMsg">
+            <div class="empty">{{ errorMsg }}</div>
+        </section>
+
+        <!-- ========== 学生端 ========== -->
+        <template v-else-if="user.user_type === 'student'">
+            <section class="panel">
+                <div class="section-head">
+                    <h2>个人信息</h2>
+                    <button class="btn secondary" @click="refresh">刷新</button>
+                </div>
+                <div class="stats">
+                    <div class="stat"><span class="muted">学号</span><strong>{{ user.user_id }}</strong></div>
+                    <div class="stat"><span class="muted">年级</span><strong>{{ myInfo.grade || '-' }}</strong></div>
+                    <div class="stat"><span class="muted">专业</span><strong>{{ myInfo.major || '-' }}</strong></div>
+                    <div class="stat"><span class="muted">选修课程</span><strong>{{ studentCourses.length }}</strong></div>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="tabs">
+                    <button class="tab" :class="{active: studentTab === 'grades'}" @click="studentTab = 'grades'">成绩查询</button>
+                    <button class="tab" :class="{active: studentTab === 'courses'}" @click="studentTab = 'courses'">我的课程</button>
+                    <button class="tab" :class="{active: studentTab === 'schedule'}" @click="studentTab = 'schedule'">课程表</button>
+                    <button class="tab" :class="{active: studentTab === 'agent'}" @click="studentTab = 'agent'">AI 助手</button>
+                </div>
+
+                <!-- 成绩 -->
+                <div v-if="studentTab === 'grades'">
+                    <div class="table-wrap" v-if="studentGrades.length">
+                        <table>
+                            <thead><tr><th>课程编号</th><th>课程名称</th><th>成绩</th><th>评语</th><th>更新时间</th></tr></thead>
+                            <tbody>
+                                <tr v-for="g in studentGrades" :key="g.course_id">
+                                    <td>{{ g.course_code || '-' }}</td>
+                                    <td>{{ g.course_name }}</td>
+                                    <td><strong :style="{color: g.score >= 60 ? '#2f855a' : '#c2413a'}">{{ g.score }}</strong></td>
+                                    <td>{{ g.comment || '-' }}</td>
+                                    <td>{{ formatTime(g.updated_at) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="empty" v-else>暂无成绩记录。</div>
+                </div>
+
+                <!-- 课程 -->
+                <div v-if="studentTab === 'courses'">
+                    <div class="table-wrap" v-if="studentCourses.length">
+                        <table>
+                            <thead><tr><th>课程编号</th><th>课程名称</th><th>授课教师</th><th>选课时间</th></tr></thead>
+                            <tbody>
+                                <tr v-for="c in studentCourses" :key="c.course_id">
+                                    <td>{{ c.course_code || '-' }}</td>
+                                    <td>{{ c.course_name }}</td>
+                                    <td>{{ c.teacher_id || '-' }}</td>
+                                    <td>{{ formatTime(c.enrolled_at) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="empty" v-else>暂无选课记录。</div>
+                </div>
+
+                <!-- 课程表 -->
+                <div v-if="studentTab === 'schedule'">
+                    <div v-if="studentSchedule.length">
+                        <div class="schedule-grid">
+                            <div class="schedule-cell header">时间</div>
+                            <div class="schedule-cell header" v-for="d in weekDays" :key="d">{{ d }}</div>
+                            <template v-for="slot in scheduleSlots" :key="slot">
+                                <div class="schedule-cell header">{{ slot }}</div>
+                                <div class="schedule-cell" v-for="(d, di) in weekDays" :key="slot+d">
+                                    <div class="schedule-item" v-for="item in getScheduleItems(di+1, slot)" :key="item.course_name+item.classroom_id">
+                                        <strong>{{ item.course_name }}</strong><br>
+                                        {{ item.classroom_id }}<br>
+                                        {{ item.teacher_id || '' }}
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                    <div class="empty" v-else>排课结果尚未发布，暂无课表。</div>
+                </div>
+
+                <!-- Agent -->
+                <div v-if="studentTab === 'agent'">
+                    <div class="agent-box">
+                        <div class="chat-messages" ref="chatMessages">
+                            <div class="chat-msg assistant">你好！我是校园查询助手。你可以问我关于你的成绩、课程、课表等问题。例如："我的平均成绩是多少？"、"我选了哪些课？"</div>
+                            <div v-for="(msg, i) in chatHistory" :key="i" class="chat-msg" :class="msg.role">{{ msg.content }}</div>
+                        </div>
+                        <div class="chat-input">
+                            <input v-model="agentQuestion" placeholder="输入你的问题..." @keyup.enter="askAgent" :disabled="agentLoading">
+                            <button class="btn" @click="askAgent" :disabled="agentLoading || !agentQuestion.trim()">
+                                {{ agentLoading ? '思考中...' : '发送' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </template>
+
+        <!-- ========== 教师端 ========== -->
+        <template v-else-if="user.user_type === 'teacher'">
+            <section class="panel">
+                <div class="section-head">
+                    <h2>教师工作台</h2>
+                    <button class="btn secondary" @click="refresh">刷新</button>
+                </div>
+                <div class="stats">
+                    <div class="stat"><span class="muted">工号</span><strong>{{ user.user_id }}</strong></div>
+                    <div class="stat"><span class="muted">学院</span><strong>{{ myInfo.college || '-' }}</strong></div>
+                    <div class="stat"><span class="muted">职称</span><strong>{{ myInfo.title || '-' }}</strong></div>
+                    <div class="stat"><span class="muted">授课门数</span><strong>{{ teacherCourses.length }}</strong></div>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="tabs">
+                    <button class="tab" :class="{active: teacherTab === 'courses'}" @click="teacherTab = 'courses'">我的课程</button>
+                    <button class="tab" :class="{active: teacherTab === 'grades'}" @click="teacherTab = 'grades'">学生成绩</button>
+                    <button class="tab" :class="{active: teacherTab === 'schedule'}" @click="teacherTab = 'schedule'">教学安排</button>
+                    <button class="tab" :class="{active: teacherTab === 'agent'}" @click="teacherTab = 'agent'">AI 助手</button>
+                </div>
+
+                <!-- 课程 -->
+                <div v-if="teacherTab === 'courses'">
+                    <div class="table-wrap" v-if="teacherCourses.length">
+                        <table>
+                            <thead><tr><th>课程编号</th><th>课程名称</th><th>描述</th><th>目标年级</th><th>目标专业</th><th>选课人数</th></tr></thead>
+                            <tbody>
+                                <tr v-for="c in teacherCourses" :key="c.course_id + (c.source||'')">
+                                    <td>{{ c.course_code || '-' }}</td>
+                                    <td>{{ c.course_name }}</td>
+                                    <td>{{ c.description || '-' }}</td>
+                                    <td>{{ c.target_grade || '-' }}</td>
+                                    <td>{{ c.target_major || '-' }}</td>
+                                    <td>{{ c.enrollment_count || 0 }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="empty" v-else>暂无授课记录。</div>
+                </div>
+
+                <!-- 成绩 -->
+                <div v-if="teacherTab === 'grades'">
+                    <div class="table-wrap" v-if="teacherGrades.length">
+                        <table>
+                            <thead><tr><th>课程名称</th><th>学号</th><th>成绩</th><th>评语</th><th>更新时间</th></tr></thead>
+                            <tbody>
+                                <tr v-for="g in teacherGrades" :key="g.course_id + g.student_id">
+                                    <td>{{ g.course_name }}</td>
+                                    <td>{{ g.student_id }}</td>
+                                    <td><strong :style="{color: g.score >= 60 ? '#2f855a' : '#c2413a'}">{{ g.score }}</strong></td>
+                                    <td>{{ g.comment || '-' }}</td>
+                                    <td>{{ formatTime(g.updated_at) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="empty" v-else>暂无学生成绩数据。</div>
+                </div>
+
+                <!-- 教学安排 -->
+                <div v-if="teacherTab === 'schedule'">
+                    <div class="table-wrap" v-if="teacherSchedule.length">
+                        <table>
+                            <thead><tr><th>课程</th><th>教学班</th><th>教室</th><th>时间</th><th>选课人数</th><th>状态</th></tr></thead>
+                            <tbody>
+                                <tr v-for="s in teacherSchedule" :key="s.course_name + s.classroom_id">
+                                    <td>{{ s.course_name }}</td>
+                                    <td>{{ s.section_name }}</td>
+                                    <td>{{ s.classroom_id }}</td>
+                                    <td>{{ s.weekday_label }} {{ s.start_time }}-{{ s.end_time }}</td>
+                                    <td>{{ s.enrolled_count }}</td>
+                                    <td><span class="pill" :class="s.is_published ? 'ok' : 'warn'">{{ s.is_published ? '已发布' : '待发布' }}</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="empty" v-else>暂无教学安排。</div>
+                </div>
+
+                <!-- Agent -->
+                <div v-if="teacherTab === 'agent'">
+                    <div class="agent-box">
+                        <div class="chat-messages" ref="chatMessages">
+                            <div class="chat-msg assistant">你好！我是教务查询助手。你可以问我关于你的课程、学生成绩等问题。例如："我教的课有哪些学生？"、"某课程的平均分是多少？"</div>
+                            <div v-for="(msg, i) in chatHistory" :key="i" class="chat-msg" :class="msg.role">{{ msg.content }}</div>
+                        </div>
+                        <div class="chat-input">
+                            <input v-model="agentQuestion" placeholder="输入你的问题..." @keyup.enter="askAgent" :disabled="agentLoading">
+                            <button class="btn" @click="askAgent" :disabled="agentLoading || !agentQuestion.trim()">
+                                {{ agentLoading ? '思考中...' : '发送' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </template>
+
+        <!-- ========== 管理端 ========== -->
+        <template v-else-if="user.user_type === 'admin'">
+            <section class="panel">
+                <div class="section-head">
+                    <h2>管理端 · 综合查询</h2>
+                    <button class="btn secondary" @click="refresh">刷新</button>
+                </div>
+                <div class="stats">
+                    <div class="stat"><span class="muted">学生总数</span><strong>{{ adminStudents.length }}</strong></div>
+                    <div class="stat"><span class="muted">教师总数</span><strong>{{ adminTeachers.length }}</strong></div>
+                    <div class="stat"><span class="muted">课程总数</span><strong>{{ adminCourses.length }}</strong></div>
+                    <div class="stat"><span class="muted">成绩记录</span><strong>{{ adminGradesTotal }}</strong></div>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="tabs">
+                    <button class="tab" :class="{active: adminTab === 'students'}" @click="adminTab = 'students'">学生信息</button>
+                    <button class="tab" :class="{active: adminTab === 'teachers'}" @click="adminTab = 'teachers'">教师信息</button>
+                    <button class="tab" :class="{active: adminTab === 'courses'}" @click="adminTab = 'courses'">课程信息</button>
+                    <button class="tab" :class="{active: adminTab === 'grades'}" @click="adminTab = 'grades'">成绩管理</button>
+                    <button class="tab" :class="{active: adminTab === 'agent'}" @click="adminTab = 'agent'">AI 助手</button>
+                </div>
+
+                <!-- 学生 -->
+                <div v-if="adminTab === 'students'">
+                    <div class="filter-bar">
+                        <input v-model="filterStudent.id" placeholder="学号" class="filter-input">
+                        <select v-model="filterStudent.grade" class="filter-input">
+                            <option value="">全部年级</option>
+                            <option v-for="g in studentGradeOptions" :key="g" :value="g">{{ g }}</option>
+                        </select>
+                        <select v-model="filterStudent.major" class="filter-input">
+                            <option value="">全部专业</option>
+                            <option v-for="m in studentMajorOptions" :key="m" :value="m">{{ m }}</option>
+                        </select>
+                        <button class="btn secondary" @click="clearFilter('student')">清除</button>
+                        <span class="muted">共 {{ filteredStudents.length }} 条</span>
+                    </div>
+                    <div class="table-wrap" v-if="filteredStudents.length">
+                        <table>
+                            <thead><tr><th>学号</th><th>年级</th><th>专业</th></tr></thead>
+                            <tbody>
+                                <tr v-for="s in filteredStudents" :key="s.student_id">
+                                    <td>{{ s.student_id }}</td>
+                                    <td>{{ s.grade }}</td>
+                                    <td>{{ s.major }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="empty" v-else>无匹配数据。</div>
+                </div>
+
+                <!-- 教师 -->
+                <div v-if="adminTab === 'teachers'">
+                    <div class="filter-bar">
+                        <input v-model="filterTeacher.id" placeholder="工号" class="filter-input">
+                        <select v-model="filterTeacher.college" class="filter-input">
+                            <option value="">全部学院</option>
+                            <option v-for="c in teacherCollegeOptions" :key="c" :value="c">{{ c }}</option>
+                        </select>
+                        <select v-model="filterTeacher.title" class="filter-input">
+                            <option value="">全部职称</option>
+                            <option v-for="t in teacherTitleOptions" :key="t" :value="t">{{ t }}</option>
+                        </select>
+                        <button class="btn secondary" @click="clearFilter('teacher')">清除</button>
+                        <span class="muted">共 {{ filteredTeachers.length }} 条</span>
+                    </div>
+                    <div class="table-wrap" v-if="filteredTeachers.length">
+                        <table>
+                            <thead><tr><th>工号</th><th>学院</th><th>职称</th></tr></thead>
+                            <tbody>
+                                <tr v-for="t in filteredTeachers" :key="t.teacher_id">
+                                    <td>{{ t.teacher_id }}</td>
+                                    <td>{{ t.college }}</td>
+                                    <td>{{ t.title }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="empty" v-else>无匹配数据。</div>
+                </div>
+
+                <!-- 课程 -->
+                <div v-if="adminTab === 'courses'">
+                    <div class="filter-bar">
+                        <input v-model="filterCourse.keyword" placeholder="课程名/编号" class="filter-input">
+                        <input v-model="filterCourse.teacher" placeholder="教师工号" class="filter-input" style="width:100px;">
+                        <select v-model="filterCourse.grade" class="filter-input">
+                            <option value="">全部年级</option>
+                            <option v-for="g in courseGradeOptions" :key="g" :value="g">{{ g }}</option>
+                        </select>
+                        <select v-model="filterCourse.major" class="filter-input">
+                            <option value="">全部专业</option>
+                            <option v-for="m in courseMajorOptions" :key="m" :value="m">{{ m }}</option>
+                        </select>
+                        <button class="btn secondary" @click="clearFilter('course')">清除</button>
+                        <span class="muted">共 {{ filteredCourses.length }} 条</span>
+                    </div>
+                    <div class="table-wrap" v-if="filteredCourses.length">
+                        <table>
+                            <thead><tr><th>ID</th><th>编号</th><th>名称</th><th>教师</th><th>目标年级</th><th>目标专业</th></tr></thead>
+                            <tbody>
+                                <tr v-for="c in filteredCourses" :key="c.course_id">
+                                    <td>{{ c.course_id }}</td>
+                                    <td>{{ c.code }}</td>
+                                    <td>{{ c.name }}</td>
+                                    <td>{{ c.teacher_id || '-' }}</td>
+                                    <td>{{ c.target_grade || '-' }}</td>
+                                    <td>{{ c.target_major || '-' }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="empty" v-else>无匹配数据。</div>
+                </div>
+
+                <!-- 成绩 -->
+                <div v-if="adminTab === 'grades'">
+                    <div class="filter-bar">
+                        <input v-model="gradeFilterStudent" placeholder="学号" class="filter-input">
+                        <input v-model="gradeFilterCourse" placeholder="课程ID" class="filter-input" style="width:100px;">
+                        <select v-model="gradeFilterScoreRange" class="filter-input">
+                            <option value="">全部分数段</option>
+                            <option value="90-100">90-100 优秀</option>
+                            <option value="80-89">80-89 良好</option>
+                            <option value="70-79">70-79 中等</option>
+                            <option value="60-69">60-69 及格</option>
+                            <option value="0-59">0-59 不及格</option>
+                        </select>
+                        <button class="btn" @click="loadAdminGrades">查询</button>
+                        <button class="btn secondary" @click="clearFilter('grade')">清除</button>
+                        <span class="muted">共 {{ filteredGrades.length }} 条</span>
+                    </div>
+                    <div class="table-wrap" v-if="filteredGrades.length">
+                        <table>
+                            <thead><tr><th>课程</th><th>学号</th><th>成绩</th><th>评语</th><th>录入者</th><th>更新时间</th></tr></thead>
+                            <tbody>
+                                <tr v-for="g in filteredGrades" :key="g.id">
+                                    <td>{{ g.course_name }}</td>
+                                    <td>{{ g.student_id }}</td>
+                                    <td><strong :style="{color: g.score >= 60 ? '#2f855a' : '#c2413a'}">{{ g.score }}</strong></td>
+                                    <td>{{ g.comment || '-' }}</td>
+                                    <td>{{ g.updated_by || '-' }}</td>
+                                    <td>{{ formatTime(g.updated_at) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="empty" v-else>暂无成绩数据。</div>
+                </div>
+
+                <!-- Agent -->
+                <div v-if="adminTab === 'agent'">
+                    <div class="agent-box">
+                        <div class="chat-messages" ref="chatMessages">
+                            <div class="chat-msg assistant">你好！我是教务管理助手。作为管理员，你可以查询所有信息并执行修改操作。例如："统计各专业学生人数"、"查看所有课程的平均成绩"、"修改某学生的成绩"</div>
+                            <div v-for="(msg, i) in chatHistory" :key="i" class="chat-msg" :class="msg.role">{{ msg.content }}</div>
+                        </div>
+                        <div class="chat-input">
+                            <input v-model="agentQuestion" placeholder="输入你的问题或指令..." @keyup.enter="askAgent" :disabled="agentLoading">
+                            <button class="btn" @click="askAgent" :disabled="agentLoading || !agentQuestion.trim()">
+                                {{ agentLoading ? '思考中...' : '发送' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </template>
+    </main>
+</div>
+
+<script>
+const API_BASE = '';
+const { createApp } = Vue;
+
+createApp({
+    data() {
+        return {
+            token: '',
+            user: {},
+            myInfo: {},
+            loading: true,
+            errorMsg: '',
+            toast: '',
+            // 学生
+            studentTab: 'grades',
+            studentGrades: [],
+            studentCourses: [],
+            studentSchedule: [],
+            // 教师
+            teacherTab: 'courses',
+            teacherCourses: [],
+            teacherGrades: [],
+            teacherSchedule: [],
+            // 管理员
+            adminTab: 'students',
+            adminStudents: [],
+            adminTeachers: [],
+            adminCourses: [],
+            adminGrades: [],
+            adminGradesTotal: 0,
+            gradeFilterStudent: '',
+            gradeFilterCourse: '',
+            gradeFilterScoreRange: '',
+            // 透视筛选
+            filterStudent: { id: '', grade: '', major: '' },
+            filterTeacher: { id: '', college: '', title: '' },
+            filterCourse: { keyword: '', teacher: '', grade: '', major: '' },
+            // Agent
+            agentQuestion: '',
+            agentLoading: false,
+            chatHistory: [],
+            // 课表
+            weekDays: ['周一', '周二', '周三', '周四', '周五'],
+        }
+    },
+    computed: {
+        roleLabel() {
+            const map = { student: '学生', teacher: '教师', admin: '管理员' };
+            return map[this.user.user_type] || '';
+        },
+        scheduleSlots() {
+            const slots = new Set();
+            this.studentSchedule.forEach(s => {
+                if (s.start_time && s.end_time) slots.add(`${s.start_time}-${s.end_time}`);
+            });
+            return [...slots].sort();
+        },
+        // 透视选项
+        studentGradeOptions() {
+            return [...new Set(this.adminStudents.map(s => s.grade).filter(Boolean))].sort();
+        },
+        studentMajorOptions() {
+            return [...new Set(this.adminStudents.map(s => s.major).filter(Boolean))].sort();
+        },
+        teacherCollegeOptions() {
+            return [...new Set(this.adminTeachers.map(t => t.college).filter(Boolean))].sort();
+        },
+        teacherTitleOptions() {
+            return [...new Set(this.adminTeachers.map(t => t.title).filter(Boolean))].sort();
+        },
+        courseGradeOptions() {
+            return [...new Set(this.adminCourses.map(c => c.target_grade).filter(Boolean))].sort();
+        },
+        courseMajorOptions() {
+            return [...new Set(this.adminCourses.map(c => c.target_major).filter(Boolean))].sort();
+        },
+        // 筛选结果
+        filteredStudents() {
+            return this.adminStudents.filter(s => {
+                if (this.filterStudent.id && !s.student_id.includes(this.filterStudent.id)) return false;
+                if (this.filterStudent.grade && s.grade !== this.filterStudent.grade) return false;
+                if (this.filterStudent.major && s.major !== this.filterStudent.major) return false;
+                return true;
+            });
+        },
+        filteredTeachers() {
+            return this.adminTeachers.filter(t => {
+                if (this.filterTeacher.id && !t.teacher_id.includes(this.filterTeacher.id)) return false;
+                if (this.filterTeacher.college && t.college !== this.filterTeacher.college) return false;
+                if (this.filterTeacher.title && t.title !== this.filterTeacher.title) return false;
+                return true;
+            });
+        },
+        filteredCourses() {
+            return this.adminCourses.filter(c => {
+                if (this.filterCourse.keyword) {
+                    const kw = this.filterCourse.keyword.toLowerCase();
+                    if (!(c.name || '').toLowerCase().includes(kw) && !(c.code || '').toLowerCase().includes(kw)) return false;
+                }
+                if (this.filterCourse.teacher && (c.teacher_id || '') !== this.filterCourse.teacher) return false;
+                if (this.filterCourse.grade && (c.target_grade || '') !== this.filterCourse.grade) return false;
+                if (this.filterCourse.major && (c.target_major || '') !== this.filterCourse.major) return false;
+                return true;
+            });
+        },
+        filteredGrades() {
+            return this.adminGrades.filter(g => {
+                if (this.gradeFilterScoreRange) {
+                    const [min, max] = this.gradeFilterScoreRange.split('-').map(Number);
+                    if (g.score < min || g.score > max) return false;
+                }
+                return true;
+            });
+        },
+    },
+    mounted() {
+        const params = new URLSearchParams(window.location.search);
+        this.token = params.get('token') || localStorage.getItem('query_token') || '';
+        if (this.token) {
+            localStorage.setItem('query_token', this.token);
+            this.init();
+        } else {
+            this.loading = false;
+        }
+    },
+    methods: {
+        async init() {
+            this.loading = true;
+            try {
+                const res = await this.api('/api/query/me');
+                if (res.success) {
+                    this.user = res.data;
+                    this.myInfo = res.data;
+                    await this.loadData();
+                } else {
+                    this.errorMsg = res.message || '认证失败';
+                }
+            } catch (e) {
+                this.errorMsg = '网络错误，请确认后端服务已启动';
+            }
+            this.loading = false;
+        },
+        async loadData() {
+            if (this.user.user_type === 'student') await this.loadStudentData();
+            else if (this.user.user_type === 'teacher') await this.loadTeacherData();
+            else if (this.user.user_type === 'admin') await this.loadAdminData();
+        },
+        async loadStudentData() {
+            const [grades, courses, schedule] = await Promise.all([
+                this.api('/api/query/student/grades'),
+                this.api('/api/query/student/courses'),
+                this.api('/api/query/student/schedule'),
+            ]);
+            if (grades.success) this.studentGrades = grades.data;
+            if (courses.success) this.studentCourses = courses.data;
+            if (schedule.success) this.studentSchedule = schedule.data;
+        },
+        async loadTeacherData() {
+            const [courses, grades, schedule] = await Promise.all([
+                this.api('/api/query/teacher/courses'),
+                this.api('/api/query/teacher/grades'),
+                this.api('/api/query/teacher/schedule'),
+            ]);
+            if (courses.success) this.teacherCourses = courses.data;
+            if (grades.success) this.teacherGrades = grades.data;
+            if (schedule.success) this.teacherSchedule = schedule.data;
+        },
+        async loadAdminData() {
+            const [students, teachers, courses, grades] = await Promise.all([
+                this.api('/api/query/admin/students'),
+                this.api('/api/query/admin/teachers'),
+                this.api('/api/query/admin/courses'),
+                this.api('/api/query/admin/grades'),
+            ]);
+            if (students.success) this.adminStudents = students.data;
+            if (teachers.success) this.adminTeachers = teachers.data;
+            if (courses.success) this.adminCourses = courses.data;
+            if (grades.success) {
+                this.adminGrades = grades.data;
+                this.adminGradesTotal = grades.total || grades.data.length;
+            }
+        },
+        async loadAdminGrades() {
+            let url = '/api/query/admin/grades?';
+            if (this.gradeFilterStudent) url += `student_id=${this.gradeFilterStudent}&`;
+            if (this.gradeFilterCourse) url += `course_id=${this.gradeFilterCourse}&`;
+            const res = await this.api(url);
+            if (res.success) {
+                this.adminGrades = res.data;
+                this.adminGradesTotal = res.total || res.data.length;
+            }
+        },
+        async askAgent() {
+            const q = this.agentQuestion.trim();
+            if (!q) return;
+            this.chatHistory.push({ role: 'user', content: q });
+            this.agentQuestion = '';
+            this.agentLoading = true;
+            this.scrollChat();
+            try {
+                const res = await this.api('/api/query/agent', 'POST', { question: q });
+                if (res.success) {
+                    this.chatHistory.push({ role: 'assistant', content: res.data.answer });
+                } else {
+                    this.chatHistory.push({ role: 'error', content: res.message || '查询失败' });
+                }
+            } catch (e) {
+                this.chatHistory.push({ role: 'error', content: '网络错误: ' + e.message });
+            }
+            this.agentLoading = false;
+            this.scrollChat();
+        },
+        async refresh() {
+            this.showToast('刷新中...');
+            await this.loadData();
+            this.showToast('刷新完成');
+        },
+        clearFilter(type) {
+            if (type === 'student') this.filterStudent = { id: '', grade: '', major: '' };
+            else if (type === 'teacher') this.filterTeacher = { id: '', college: '', title: '' };
+            else if (type === 'course') this.filterCourse = { keyword: '', teacher: '', grade: '', major: '' };
+            else if (type === 'grade') { this.gradeFilterStudent = ''; this.gradeFilterCourse = ''; this.gradeFilterScoreRange = ''; this.loadAdminGrades(); }
+        },
+        getScheduleItems(weekday, slotKey) {
+            return this.studentSchedule.filter(s => s.weekday === weekday && `${s.start_time}-${s.end_time}` === slotKey);
+        },
+        scrollChat() {
+            this.$nextTick(() => {
+                const el = this.$refs.chatMessages;
+                if (el) el.scrollTop = el.scrollHeight;
+            });
+        },
+        formatTime(t) {
+            if (!t) return '-';
+            return t.replace('T', ' ').substring(0, 16);
+        },
+        showToast(msg) {
+            this.toast = msg;
+            setTimeout(() => { this.toast = ''; }, 2000);
+        },
+        async api(url, method = 'GET', body = null) {
+            const opts = {
+                method,
+                headers: { 'Authorization': `Bearer ${this.token}`, 'Content-Type': 'application/json' },
+            };
+            if (body) opts.body = JSON.stringify(body);
+            const res = await fetch(`${API_BASE}${url}`, opts);
+            return await res.json();
+        },
+    }
+}).mount('#app');
+</script>
+</body>
+</html>
