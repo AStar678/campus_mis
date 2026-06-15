@@ -184,9 +184,19 @@ class ClassroomCourse(db.Model):
     __bind_key__ = "classroom"
     __tablename__ = "courses"
     id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(32))
     name = db.Column(db.String(100), nullable=False)
-    teacher_id = db.Column(db.String(4))
     description = db.Column(db.String(500))
+    teacher_id = db.Column(db.String(4))
+    class_time = db.Column(db.String(120))
+    location = db.Column(db.String(120))
+    credits = db.Column(db.Float)
+    language = db.Column(db.String(20))
+    course_type = db.Column(db.String(20))
+    teaching_method = db.Column(db.String(40))
+    target_grade = db.Column(db.String(16))
+    target_major = db.Column(db.String(64))
+    created_at = db.Column(db.DateTime)
 
 
 class ClassroomCourseStudent(db.Model):
@@ -348,99 +358,143 @@ def get_student_schedule(user):
 @app.route("/api/query/teacher/courses", methods=["GET"])
 @require_auth("teacher")
 def get_teacher_courses(user):
-    """教师查询自己教授的课程"""
+    """教师查询自己教授的课程（优先从 classroom_database 查询）"""
     teacher_id = user["user_id"]
-    # 从 main_database.courses
-    courses = Course.query.filter_by(teacher_id=teacher_id).all()
+
+    # 主要数据源：classroom_database.courses
+    cl_courses = ClassroomCourse.query.filter_by(teacher_id=teacher_id).all()
     result = []
+    for c in cl_courses:
+        student_count = ClassroomCourseStudent.query.filter_by(course_id=c.id).count()
+        result.append({
+            "course_id": c.id,
+            "course_code": c.code,
+            "course_name": c.name,
+            "description": c.description,
+            "class_time": c.class_time,
+            "location": c.location,
+            "credits": c.credits,
+            "enrollment_count": student_count,
+            "source": "classroom",
+        })
+
+    # 补充数据源：main_database.courses（历史数据）
+    courses = Course.query.filter_by(teacher_id=teacher_id).all()
     for c in courses:
+        # 跳过已存在于 classroom 中的课程（按名称去重）
+        existing_names = {item["course_name"] for item in result}
+        if c.name in existing_names:
+            continue
         enrollment_count = CourseEnrollment.query.filter_by(course_id=c.id).count()
         result.append({
             "course_id": c.id,
             "course_code": c.code,
             "course_name": c.name,
             "description": c.description,
+            "class_time": None,
+            "location": None,
+            "credits": None,
             "target_grade": c.target_grade,
             "target_major": c.target_major,
             "enrollment_count": enrollment_count,
+            "source": "main",
         })
-    # 从 course_schedule_database 中的教学班
-    cs_sections = CsCourseSection.query.filter_by(teacher_id=teacher_id).all()
-    for s in cs_sections:
-        cs_course = db.session.get(CsCourse, s.course_id)
-        result.append({
-            "course_id": s.course_id,
-            "course_code": s.section_id,
-            "course_name": cs_course.course_name if cs_course else s.section_name,
-            "description": f"教学班: {s.section_name}",
-            "target_grade": None,
-            "target_major": None,
-            "enrollment_count": s.capacity,
-            "source": "course_schedule",
-        })
+
     return jsonify({"success": True, "data": result})
 
 
 @app.route("/api/query/teacher/grades", methods=["GET"])
 @require_auth("teacher")
 def get_teacher_course_grades(user):
-    """教师查询自己课程的学生成绩"""
+    """教师查询自己课程的学生成绩（优先 classroom_database）"""
     teacher_id = user["user_id"]
+    result = []
+
+    # 主要数据源：classroom_database
+    cl_courses = ClassroomCourse.query.filter_by(teacher_id=teacher_id).all()
+    for c in cl_courses:
+        students = ClassroomCourseStudent.query.filter_by(course_id=c.id).all()
+        for cs in students:
+            student = db.session.get(Student, cs.student_id)
+            result.append({
+                "course_id": c.id,
+                "course_code": c.code,
+                "course_name": c.name,
+                "student_id": cs.student_id,
+                "student_name": student.name if student else cs.student_id,
+                "score": cs.final_grade,
+                "comment": None,
+                "source": "classroom",
+            })
+
+    # 补充：main_database（历史成绩）
     courses = Course.query.filter_by(teacher_id=teacher_id).all()
     course_ids = [c.id for c in courses]
+    if course_ids:
+        grades = CourseGrade.query.filter(CourseGrade.course_id.in_(course_ids)).all()
+        for g in grades:
+            course = db.session.get(Course, g.course_id)
+            result.append({
+                "course_id": g.course_id,
+                "course_code": course.code if course else None,
+                "course_name": course.name if course else f"课程#{g.course_id}",
+                "student_id": g.student_id,
+                "student_name": None,
+                "score": g.score,
+                "comment": g.comment,
+                "updated_at": g.updated_at.isoformat() if g.updated_at else None,
+                "source": "main",
+            })
 
-    if not course_ids:
-        return jsonify({"success": True, "data": []})
-
-    grades = CourseGrade.query.filter(CourseGrade.course_id.in_(course_ids)).all()
-    result = []
-    for g in grades:
-        course = db.session.get(Course, g.course_id)
-        result.append({
-            "course_id": g.course_id,
-            "course_name": course.name if course else f"课程#{g.course_id}",
-            "student_id": g.student_id,
-            "score": g.score,
-            "comment": g.comment,
-            "updated_at": g.updated_at.isoformat() if g.updated_at else None,
-        })
     return jsonify({"success": True, "data": result})
 
 
 @app.route("/api/query/teacher/schedule", methods=["GET"])
 @require_auth("teacher")
 def get_teacher_schedule(user):
-    """教师查询自己的教学安排（课程表）"""
+    """教师查询自己的教学安排（优先 classroom_database，补充排课系统）"""
     teacher_id = user["user_id"]
+    result = []
+
+    # 主要数据源：classroom_database.courses
+    cl_courses = ClassroomCourse.query.filter_by(teacher_id=teacher_id).all()
+    for c in cl_courses:
+        student_count = ClassroomCourseStudent.query.filter_by(course_id=c.id).count()
+        result.append({
+            "course_name": c.name,
+            "course_code": c.code,
+            "class_time": c.class_time,
+            "location": c.location,
+            "enrolled_count": student_count,
+            "source": "classroom",
+        })
+
+    # 补充：course_schedule_database
     sections = CsCourseSection.query.filter_by(teacher_id=teacher_id).all()
     section_ids = [s.section_id for s in sections]
+    if section_ids:
+        weekday_map = {1: "周一", 2: "周二", 3: "周三", 4: "周四", 5: "周五", 6: "周六", 7: "周日"}
+        sched_results = CsScheduleResult.query.filter(
+            CsScheduleResult.section_id.in_(section_ids)
+        ).all()
+        for r in sched_results:
+            slot = db.session.get(CsTimeSlot, r.slot_id)
+            cs_course = db.session.get(CsCourse, r.course_id)
+            section = db.session.get(CsCourseSection, r.section_id)
+            result.append({
+                "course_name": cs_course.course_name if cs_course else r.course_id,
+                "section_name": section.section_name if section else r.section_id,
+                "classroom_id": r.classroom_id,
+                "weekday": slot.weekday if slot else None,
+                "weekday_label": weekday_map.get(slot.weekday, "-") if slot else "-",
+                "start_time": slot.start_time if slot else None,
+                "end_time": slot.end_time if slot else None,
+                "enrolled_count": r.enrolled_count,
+                "is_published": r.is_published,
+                "source": "course_schedule",
+            })
 
-    if not section_ids:
-        return jsonify({"success": True, "data": []})
-
-    results = CsScheduleResult.query.filter(
-        CsScheduleResult.section_id.in_(section_ids)
-    ).all()
-
-    weekday_map = {1: "周一", 2: "周二", 3: "周三", 4: "周四", 5: "周五", 6: "周六", 7: "周日"}
-    schedule = []
-    for r in results:
-        slot = db.session.get(CsTimeSlot, r.slot_id)
-        cs_course = db.session.get(CsCourse, r.course_id)
-        section = db.session.get(CsCourseSection, r.section_id)
-        schedule.append({
-            "course_name": cs_course.course_name if cs_course else r.course_id,
-            "section_name": section.section_name if section else r.section_id,
-            "classroom_id": r.classroom_id,
-            "weekday": slot.weekday if slot else None,
-            "weekday_label": weekday_map.get(slot.weekday, "-") if slot else "-",
-            "start_time": slot.start_time if slot else None,
-            "end_time": slot.end_time if slot else None,
-            "slot_label": slot.label if slot else None,
-            "enrolled_count": r.enrolled_count,
-            "is_published": r.is_published,
-        })
-    return jsonify({"success": True, "data": schedule})
+    return jsonify({"success": True, "data": result})
 
 
 @app.route("/api/query/admin/students", methods=["GET"])
@@ -519,86 +573,137 @@ def admin_list_grades(user):
     return jsonify({"success": True, "data": result, "total": total, "page": page})
 
 
+@app.route("/api/query/admin/classroom-courses", methods=["GET"])
+@require_auth("admin")
+def admin_list_classroom_courses(user):
+    """管理员查询课堂教学服务的所有课程信息"""
+    courses = ClassroomCourse.query.all()
+    result = [{
+        "id": c.id,
+        "code": c.code,
+        "name": c.name,
+        "description": c.description,
+        "teacher_id": c.teacher_id,
+        "class_time": c.class_time,
+        "location": c.location,
+        "credits": c.credits,
+        "language": c.language,
+        "course_type": c.course_type,
+        "teaching_method": c.teaching_method,
+        "target_grade": c.target_grade,
+        "target_major": c.target_major,
+    } for c in courses]
+    return jsonify({"success": True, "data": result})
+
+
 # ============ DeepSeek Agent ============
 
 def get_db_schema_description(user_type):
-    """根据角色返回可查询的数据库结构描述"""
+    """根据角色返回可查询的数据库结构描述（非常详细）"""
     base_schema = """
-可查询的数据库结构：
+可查询的数据库及表结构：
 
-1. users_database.students (学生信息表)
-   - student_id VARCHAR(8) 主键，学号
-   - grade VARCHAR(10) 年级
-   - major VARCHAR(50) 专业
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+数据库 1: classroom_database（课堂教学服务 —— 核心教学数据）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+❗❗❗ 这是最重要的数据库！查询教师授课、课程信息、学生成绩时必须优先使用此库。
 
-2. users_database.teachers (教师信息表)
-   - teacher_id VARCHAR(4) 主键，工号
-   - college VARCHAR(50) 学院
-   - title VARCHAR(20) 职称
+表 1.1: classroom_database.courses
+  说明：教师在课堂教学平台实际创建并授课的课程（课程编号以 CLS 开头）
+  字段：
+    - id          INT 主键 自增
+    - code        VARCHAR(32)  课程编号，格式如 CLS001、CLS002
+    - name        VARCHAR(100) 课程名称，如"长时序列预测 (LTSF) 进阶模型"、"移动应用开发"
+    - description VARCHAR(500) 课程描述
+    - teacher_id  VARCHAR(4)   授课教师工号，如 '1001'、'1002'，与 users_database.teachers.teacher_id 一致
+    - class_time  VARCHAR(120) 上课时间，如"周一 1-2 节 08:00-09:40"
+    - location    VARCHAR(120) 上课地点，如"A101"、"B201"
+    - credits     FLOAT        学分，如 2.0
+    - language    VARCHAR(20)  授课语言，如"中文"、"English"
+    - course_type VARCHAR(20)  课程类型：必修 / 选修
+    - teaching_method VARCHAR(40) 授课方式：线下/线上/混合
+    - target_grade VARCHAR(16)  目标年级，如"2024"
+    - target_major VARCHAR(64)  目标专业，如"计算机科学与技术"
+    - created_at  DATETIME     创建时间
+  示例数据：
+    (1, 'CLS001', '长时序列预测 (LTSF) 进阶模型', '1001', '周一 1-2 节 08:00-09:40', 'A101', 2.0)
+    (7, 'CLS007', '移动应用开发', '1001', '周三 3-4 节 10:00-11:40', 'A201', 2.0)
 
-3. main_database.courses (课程信息表)
-   - id INT 主键
-   - code VARCHAR(30) 课程编号
-   - name VARCHAR(100) 课程名称
-   - description TEXT 课程描述
-   - teacher_id VARCHAR(4) 授课教师工号
-   - target_grade VARCHAR(10) 目标年级
-   - target_major VARCHAR(50) 目标专业
+表 1.2: classroom_database.course_students
+  说明：课堂选课学生表，记录哪些学生选了哪门课，以及最终成绩
+  字段：
+    - id          INT 主键
+    - course_id   INT 外键 → courses.id
+    - student_id  VARCHAR(8)  学号，如 '20240001'
+    - final_grade FLOAT       最终成绩（0-100），可能为 NULL（尚未打分）
 
-4. main_database.course_enrollments (选课记录表)
-   - id INT 主键
-   - course_id INT 课程ID
-   - student_id VARCHAR(8) 学号
-   - created_at DATETIME 选课时间
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+数据库 2: users_database（用户基础数据）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-5. main_database.course_grades (成绩表)
-   - id INT 主键
-   - course_id INT 课程ID
-   - student_id VARCHAR(8) 学号
-   - score FLOAT 成绩分数
-   - comment VARCHAR(255) 评语
-   - updated_by VARCHAR(4) 更新者工号
-   - updated_at DATETIME 更新时间
+表 2.1: users_database.teachers
+  说明：所有教师信息
+  字段：
+    - teacher_id  VARCHAR(4)  主键，工号，如 '1001'
+    - password    VARCHAR(128) 密码哈希（不要查询或暴露此字段）
+    - college     VARCHAR(50)  所属学院，如"计算机学院"
+    - title       VARCHAR(20)  职称，如"教授"、"副教授"
+    - name        VARCHAR(50)  姓名，如"陆思阳"
 
-6. course_schedule_database.cs_courses (排课课程表)
-   - course_id VARCHAR(20) 主键
-   - course_name VARCHAR(100) 课程名
-   - teacher_id VARCHAR(4) 教师工号
-   - capacity INT 容量
-   - credits FLOAT 学分
-   - hours_per_week INT 每周学时
-   - status VARCHAR(20) 状态
+表 2.2: users_database.students
+  说明：所有学生信息
+  字段：
+    - student_id  VARCHAR(8)  主键，学号
+    - password    VARCHAR(128) 密码哈希（不要查询或暴露此字段）
+    - grade       VARCHAR(10)  年级，如 '2024'
+    - major       VARCHAR(50)  专业，如"计算机科学与技术"
 
-7. course_schedule_database.cs_course_sections (教学班表)
-   - section_id VARCHAR(30) 主键
-   - course_id VARCHAR(20) 所属课程
-   - section_name VARCHAR(100) 教学班名
-   - teacher_id VARCHAR(20) 教师
-   - capacity INT 容量
+表 2.3: users_database.admins
+  字段：admin_id VARCHAR(20), password VARCHAR(128), name VARCHAR(50)
 
-8. course_schedule_database.cs_schedule_results (排课结果表)
-   - id INT 主键
-   - course_id VARCHAR(20)
-   - section_id VARCHAR(30)
-   - classroom_id VARCHAR(4) 教室
-   - slot_id INT 时间段ID
-   - enrolled_count INT 选课人数
-   - is_published BOOLEAN 是否发布
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+数据库 3: course_schedule_database（排课调度数据）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ 仅用于查询教室排课时间段、选课申请状态时使用，不要用于查询教师授课课程！
+注意：此库课程编号以 CS 开头（如 CS001），与 classroom_database 的 CLS 开头不同，是两个独立系统。
 
-9. course_schedule_database.cs_time_slots (时间段表)
-   - slot_id INT 主键
-   - weekday INT 星期几(1-7)
-   - start_time VARCHAR(5) 开始时间
-   - end_time VARCHAR(5) 结束时间
-   - label VARCHAR(50) 时间段标签
+表 3.1: course_schedule_database.cs_courses
+  字段：course_id VARCHAR(20) 主键, course_name VARCHAR(100), teacher_id VARCHAR(4),
+        capacity INT, credits DECIMAL(4,1), hours_per_week INT,
+        preferred_building VARCHAR(50), status VARCHAR(20)
 
-10. course_schedule_database.cs_course_requests (选课申请表)
-    - id INT 主键
-    - student_id VARCHAR(8) 学号
-    - course_id VARCHAR(20) 课程ID
-    - section_id VARCHAR(30) 教学班ID
-    - preference_level INT 意向级别
-    - status VARCHAR(20) 状态(submitted/scheduled/waitlisted/cancelled)
+表 3.2: course_schedule_database.cs_course_sections
+  字段：section_id VARCHAR(30) 主键, course_id VARCHAR(20), section_name VARCHAR(100),
+        teacher_id VARCHAR(20), capacity INT, preferred_building VARCHAR(50), status VARCHAR(20)
+
+表 3.3: course_schedule_database.cs_schedule_results
+  字段：id INT 主键, run_id INT, course_id VARCHAR(20), section_id VARCHAR(30),
+        classroom_id VARCHAR(4), slot_id INT, enrolled_count INT,
+        score FLOAT, reason VARCHAR(500), is_published BOOLEAN
+
+表 3.4: course_schedule_database.cs_time_slots
+  字段：slot_id INT 主键, weekday INT(1=周一..7=周日),
+        start_time VARCHAR(5), end_time VARCHAR(5), label VARCHAR(50)
+
+表 3.5: course_schedule_database.cs_course_requests
+  字段：id INT 主键, student_id VARCHAR(8), course_id VARCHAR(20),
+        section_id VARCHAR(30), preference_level INT, status VARCHAR(20)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+数据库 4: main_database（历史教务数据，优先级最低）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ 这是旧系统的遗留数据，一般不用于查询当前教师课程。
+
+表 4.1: main_database.courses
+  字段：id INT 主键, code VARCHAR(30), name VARCHAR(100), description TEXT,
+        teacher_id VARCHAR(4), target_grade VARCHAR(10), target_major VARCHAR(50)
+
+表 4.2: main_database.course_enrollments
+  字段：id INT 主键, course_id INT, student_id VARCHAR(8)
+
+表 4.3: main_database.course_grades
+  字段：id INT 主键, course_id INT, student_id VARCHAR(8), score FLOAT,
+        comment VARCHAR(255), updated_by VARCHAR(4), updated_at DATETIME
 """
     return base_schema
 
@@ -643,14 +748,72 @@ def build_agent_system_prompt(user_type, user_id):
 
 {schema}
 
-请根据用户的自然语言问题，生成合适的 SQL 查询语句并返回结果。
+╔════════════════════════════════════════╗
+║        查询规则（必须严格遵守）            ║
+╚════════════════════════════════════════╝
 
-输出规则：
-1. 如果需要执行SQL，请在回复中包含 ```sql 代码块
-2. 对查询结果进行简明易懂的中文总结
-3. 如果用户的请求超出权限范围，请礼貌拒绝并说明原因
-4. 生成的SQL必须是安全的，不能包含危险操作
-5. 如果不确定用户的意图，请询问澄清
+规则 1: 数据库选择优先级
+  ① classroom_database.courses → 查询教师授课课程、课程详情、上课时间地点
+  ② classroom_database.course_students → 查询学生成绩、选课学生
+  ③ users_database.teachers/students → 查询教师/学生基本信息（姓名、学院、职称等）
+  ④ course_schedule_database → 仅在查询“排课时间段”、“选课申请状态”、“教室排课结果”时使用
+  ⑤ main_database → 仅在查询“历史选课记录”、“历史成绩”时使用
+
+规则 2: 绝对禁止的错误查询方式
+  ✗ 查询“教师教哪些课”时，禁止查 course_schedule_database.cs_courses
+  ✗ 查询“教师课程”时，禁止查 main_database.courses
+  ✗ 查询 classroom_database 时禁止用 CS 开头的编号
+  ✗ 查询 course_schedule_database 时禁止用 CLS 开头的编号
+
+规则 3: SQL 生成要求
+  - 查询 classroom_database.courses 时必须用 SELECT ... FROM classroom_database.courses
+  - 多库 JOIN 时需要写全库名和表名，如 classroom_database.courses c JOIN users_database.teachers t ON c.teacher_id = t.teacher_id
+  - 生成的 SQL 必须安全，禁止 DROP/TRUNCATE/ALTER/CREATE DATABASE
+  - 禁止查询 password 字段
+
+规则 4: 回复要求
+  - 在回复中包含 ```sql 代码块，便于自动执行
+  - 执行结果用中文简明总结，包含关键数据
+  - 如果不确定用户意图，请询问澄清
+
+标准查询示例：
+
+Q1: “工号1001的老师教哪些课”或“教师1001的课程”
+A1:
+```sql
+SELECT c.name AS 课程名称, c.code AS 课程编号, c.class_time AS 上课时间,
+       c.location AS 上课地点, c.credits AS 学分, t.name AS 教师姓名
+FROM classroom_database.courses c
+JOIN users_database.teachers t ON c.teacher_id = t.teacher_id
+WHERE c.teacher_id = '1001'
+```
+
+Q2: “教师1001的姓名和职称”
+A2:
+```sql
+SELECT name AS 姓名, college AS 学院, title AS 职称
+FROM users_database.teachers WHERE teacher_id = '1001'
+```
+
+Q3: “CLS001课程的学生成绩”
+A3:
+```sql
+SELECT cs.student_id AS 学号, s.name AS 姓名, cs.final_grade AS 成绩
+FROM classroom_database.course_students cs
+LEFT JOIN users_database.students s ON cs.student_id = s.student_id
+WHERE cs.course_id = 1
+```
+
+Q4: “哪些学生不及格”
+A4:
+```sql
+SELECT cs.student_id AS 学号, s.name AS 姓名, cs.final_grade AS 成绩,
+       c.name AS 课程名称
+FROM classroom_database.course_students cs
+JOIN classroom_database.courses c ON cs.course_id = c.id
+LEFT JOIN users_database.students s ON cs.student_id = s.student_id
+WHERE cs.final_grade < 60 AND cs.final_grade IS NOT NULL
+```
 """
 
 
