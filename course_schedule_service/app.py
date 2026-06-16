@@ -17,6 +17,10 @@ import re
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
+import pymysql
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 app = Flask(__name__)
@@ -81,10 +85,26 @@ class BuildingAdjacency(db.Model):
 
 # 选课排课业务表，由本服务独立维护，统一使用 cs_ 表名前缀。
 class Course(db.Model):
-    """可选课程信息，供学生提交申请、管理员参与排课。"""
-
+    """
+    可选课程信息（排课系统专用），供学生提交申请、管理员参与排课。
+    
+    ⚠️ 跨库关系说明：
+    - 本表（cs_courses）与 classroom_database.courses 维护两套独立的课程目录
+    - cs_courses: 排课系统的「开课计划」，面向选课排课流程
+    - classroom_database.courses: 教学管理的「课程主数据」，面向课堂教学
+    - 两表职责不同，教师/学分等字段可能不同（如同名课程由不同教师任课）
+    
+    ⚠️ 数据流向：
+    - 选课申请(cs_course_requests) → 排课结果(cs_schedule_results)
+    - 发布排课结果 → 自动同步到 classroom_database.course_students
+    - 同步规则：按 course_name ↔ courses.name 名称匹配
+    
+    ⚠️ 历史清理：
+    - 本表 CS_CLS 开头的副本课程（20 行）已在 2026-06-16 清理
+    - 数据真相源：classroom_teaching_service → classroom_database.courses
+    - 本表仅用于排课流程，不复制 classroom 的课程数据
+    """
     __tablename__ = "cs_courses"
-
     course_id = db.Column(db.String(20), primary_key=True)
     course_name = db.Column(db.String(100), nullable=False)
     teacher_id = db.Column(db.String(20))
@@ -1467,7 +1487,23 @@ def update_schedule_result(_user, result_id):
 @app.route("/api/course-schedule/results/publish", methods=["POST"])
 @require_auth("admin")
 def publish_results(_user):
-    """发布排课结果，发布后学生端可查看。"""
+    """
+    发布排课结果，发布后学生端可查看。
+    
+    ⚠️ 跨库同步说明：
+    发布排课结果后，需要将 scheduled 状态的选课申请同步到
+    classroom_database.course_students（课堂教学管理的教学班学生表）。
+    
+    同步规则：
+    - 仅同步 status='scheduled' 的选课申请
+    - 按课程名称匹配 cs_courses.course_name ↔ classroom_database.courses.name
+    - 如果 classroom 中无对应课程，则跳过（需手动处理）
+    
+    数据流向：
+    cs_course_requests (选课申请) → cs_schedule_results (排课结果)
+      ↓ 发布后
+    classroom.course_students (教学班学生) ← 课堂教学管理
+    """
 
     allowed, message = ensure_batch_action("publish")
     if not allowed:
@@ -1475,7 +1511,104 @@ def publish_results(_user):
 
     updated = ScheduleResult.query.update({"is_published": True})
     db.session.commit()
-    return jsonify({"success": True, "message": f"已发布 {updated} 条排课结果"})
+    
+    # 🔴 新增：发布后同步选课学生到 classroom_database.course_students
+    sync_count = _sync_scheduled_students_to_classroom()
+    
+    return jsonify({
+        "success": True,
+        "message": f"已发布 {updated} 条排课结果",
+        "synced_students": sync_count
+    })
+
+
+def _sync_scheduled_students_to_classroom():
+    """
+    将 scheduled 状态的选课学生同步到 classroom_database.course_students。
+    
+    同步逻辑：
+    1. 查询所有 status='scheduled' 的选课申请
+    2. 按课程名称匹配 classroom_database.courses
+    3. 将匹配成功的学生插入 classroom_database.course_students（去重）
+    
+    返回：成功同步的学生数量
+    
+    ⚠️ 跨库同步限制：
+    - course_schedule_database 和 classroom_database 维护独立的课程目录
+    - 只有名称完全匹配的课程才能自动同步
+    - 名称不匹配的课程需要管理员手动处理
+    """
+    import pymysql
+    
+    # 获取数据库密码
+    _DB_PASS = os.getenv("DB_PASS", "")
+    _DB_PASS_RAW = unquote(_DB_PASS)
+    
+    sync_count = 0
+    
+    try:
+        # 查询 scheduled 选课
+        scheduled = db.session.execute(
+            db.text("""
+                SELECT r.student_id, r.course_id, c.course_name
+                FROM cs_course_requests r
+                JOIN cs_courses c ON r.course_id = c.course_id
+                WHERE r.status = 'scheduled'
+            """)
+        ).fetchall()
+        
+        if not scheduled:
+            return 0
+        
+        # 连接 classroom_database
+        cl_conn = pymysql.connect(
+            host=DB_HOST, port=DB_PORT,
+            user=DB_USER, password=_DB_PASS_RAW,
+            database="classroom_database", charset="utf8mb4"
+        )
+        cl_cur = cl_conn.cursor(pymysql.cursors.DictCursor)
+        
+        # 获取 classroom.courses 的 name→id 映射
+        cl_cur.execute("SELECT id, name FROM courses")
+        cl_courses = {r['name']: r['id'] for r in cl_cur.fetchall()}
+        
+        # 获取已存在的 course_students（去重）
+        cl_cur.execute("SELECT student_id, course_id FROM course_students")
+        existing = {(r['student_id'], r['course_id']) for r in cl_cur.fetchall()}
+        
+        # 同步
+        for row in scheduled:
+            course_name = row[2]  # course_name
+            student_id = row[0]   # student_id
+            
+            if course_name in cl_courses:
+                cl_course_id = cl_courses[course_name]
+                if (student_id, cl_course_id) not in existing:
+                    cl_cur.execute(
+                        "INSERT INTO course_students (course_id, student_id, final_grade) VALUES (%s, %s, NULL)",
+                        (cl_course_id, student_id)
+                    )
+                    existing.add((student_id, cl_course_id))
+                    sync_count += 1
+            else:
+                logger.warning(
+                    f"跨库同步跳过: 课程「{course_name}」不在 classroom_database.courses 中，"
+                    f"学生={student_id} 需手动处理"
+                )
+        
+        cl_conn.commit()
+        cl_cur.close()
+        cl_conn.close()
+        
+        if sync_count > 0:
+            logger.info(f"跨库同步完成: {sync_count} 名学生已同步到 classroom_database.course_students")
+        
+    except Exception as e:
+        logger.error(f"跨库同步失败: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    return sync_count
 
 
 if __name__ == "__main__":

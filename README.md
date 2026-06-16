@@ -132,3 +132,24 @@ http://127.0.0.1:5004/?token=<token>
 - 校园墙说明：`campus_wall_service/README.md`
 - 选课排课说明：`services/course_schedule/README.md`
 - 架构说明：`docs/architecture.md`
+- **部署指南**：`DEPLOYMENT.md`
+
+## 云服务器部署
+
+本项目已配置自动化部署脚本，可快速部署到云服务器。
+
+### 快速部署
+
+```bash
+cd /Users/aoxiang/Desktop/校园MIS/campus_mis
+chmod +x deploy_simple.sh
+./deploy_simple.sh
+```
+
+部署脚本会自动：
+1. 上传所有服务代码到服务器（47.93.226.110）
+2. 安装Python依赖
+3. 初始化数据库
+4. 启动所有服务（端口5001、5004、5005）
+
+详细部署说明请查看 [DEPLOYMENT.md](DEPLOYMENT.md)
