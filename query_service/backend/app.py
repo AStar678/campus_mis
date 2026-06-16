@@ -64,6 +64,7 @@ class Student(db.Model):
     password = db.Column(db.String(128), nullable=False)
     grade = db.Column(db.String(10))
     major = db.Column(db.String(50))
+    name = db.Column(db.String(50), default="")
 
 
 class Teacher(db.Model):
@@ -73,6 +74,7 @@ class Teacher(db.Model):
     password = db.Column(db.String(128), nullable=False)
     college = db.Column(db.String(50))
     title = db.Column(db.String(20))
+    name = db.Column(db.String(50), default="")
 
 
 class Admin(db.Model):
@@ -846,14 +848,15 @@ def execute_safe_sql(sql, user_type):
             if sql_upper.startswith(kw):
                 return None, "当前角色无权执行修改操作"
 
-    # 3. 🔴 新增：禁止跨库修改
-    forbidden_databases = [
-        'classroom_database', 'course_schedule_database',
-        'users_database', 'campus_wall_database'
-    ]
-    for db_name in forbidden_databases:
-        if db_name in sql:
-            return None, f"禁止修改 {db_name} 的数据"
+    # 3. 禁止跨库修改（仅对 INSERT/UPDATE/DELETE 生效，SELECT 不受限）
+    if any(kw in sql_upper for kw in modify_keywords):
+        forbidden_databases = [
+            'classroom_database', 'course_schedule_database',
+            'users_database', 'campus_wall_database'
+        ]
+        for db_name in forbidden_databases:
+            if db_name in sql:
+                return None, f"禁止修改 {db_name} 的数据"
 
     # 4. 🔴 新增：限制可修改的表（白名单）
     if any(kw in sql_upper for kw in modify_keywords):
