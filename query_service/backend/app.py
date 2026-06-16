@@ -83,20 +83,55 @@ class Admin(db.Model):
     name = db.Column(db.String(50))
 
 
-# main_database 表
+# classroom_database 表（真相源）
 class Course(db.Model):
+    """
+    课程信息（只读访问）
+    
+    ⚠️ 只读访问 classroom_database.courses
+    数据真相源：classroom_teaching_service → classroom_database.courses
+    用途：查询课程信息、教师信息、课程描述等
+    
+    注意：
+    - main_database.courses 已废弃（重命名为 courses_backup_20260616）
+    - course_schedule_database.cs_courses 中的 CS_CLS 副本已清理
+    - 唯一真相源：classroom_database.courses
+    """
+    __bind_key__ = "classroom"
     __tablename__ = "courses"
     id = db.Column(db.Integer, primary_key=True)
-    code = db.Column(db.String(30), unique=True)
+    code = db.Column(db.String(32), default="")
     name = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.Text)
-    teacher_id = db.Column(db.String(4))
-    target_grade = db.Column(db.String(10))
-    target_major = db.Column(db.String(50))
-    created_at = db.Column(db.DateTime)
+    description = db.Column(db.String(500), default="")
+    teacher_id = db.Column(db.String(4), nullable=False)
+    class_time = db.Column(db.String(120), default="")
+    location = db.Column(db.String(120), default="")
+    credits = db.Column(db.Float, default=2.0)
+    language = db.Column(db.String(20), default="中文")
+    course_type = db.Column(db.String(20), default="必修")
+    teaching_method = db.Column(db.String(40), default="线下")
+    target_grade = db.Column(db.String(16), default="")
+    target_major = db.Column(db.String(64), default="")
+    created_at = db.Column(db.DateTime, default=datetime.now)
 
 
 class CourseEnrollment(db.Model):
+    """
+    历史选课记录（只读归档）
+    
+    ⚠️ 只读访问，禁止修改
+    数据真相源：classroom_database.course_students
+    数据来源：每学期末从 classroom_database.course_students 归档
+    用途：查询学生历史选课记录
+    同步方式：手动或定时任务归档
+    
+    数据流向：
+    cs_course_requests (学生选课申请，course_schedule_service)
+      ↓ 排课成功 → 发布课程
+    course_students (当前教学班，classroom_teaching_service) ← 真相源
+      ↓ 学期结束归档 → 定期同步
+    course_enrollments (历史选课记录，main_database) ← 只读归档
+    """
     __tablename__ = "course_enrollments"
     id = db.Column(db.Integer, primary_key=True)
     course_id = db.Column(db.Integer, nullable=False)
@@ -105,6 +140,18 @@ class CourseEnrollment(db.Model):
 
 
 class CourseGrade(db.Model):
+    """
+    历史总评成绩（只读归档）
+    
+    ⚠️ 只读访问
+    数据真相源：教师录入的期末/总评成绩
+    用途：查询学生课程最终总评成绩
+    
+    与 classroom_database.grades 的区别：
+    - course_grades: 只存总评成绩，无 source_type 字段（56 行）
+    - grades: 存分项成绩（作业/测验/期末/总评），有 source_type 字段（9 行）
+    - 重叠: 0 条（两者互补，可以保留）
+    """
     __tablename__ = "course_grades"
     id = db.Column(db.Integer, primary_key=True)
     course_id = db.Column(db.Integer, nullable=False)
@@ -179,27 +226,14 @@ class CsCourseRequest(db.Model):
     created_at = db.Column(db.DateTime)
 
 
-# classroom_database 表
-class ClassroomCourse(db.Model):
-    __bind_key__ = "classroom"
-    __tablename__ = "courses"
-    id = db.Column(db.Integer, primary_key=True)
-    code = db.Column(db.String(32))
-    name = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.String(500))
-    teacher_id = db.Column(db.String(4))
-    class_time = db.Column(db.String(120))
-    location = db.Column(db.String(120))
-    credits = db.Column(db.Float)
-    language = db.Column(db.String(20))
-    course_type = db.Column(db.String(20))
-    teaching_method = db.Column(db.String(40))
-    target_grade = db.Column(db.String(16))
-    target_major = db.Column(db.String(64))
-    created_at = db.Column(db.DateTime)
-
-
-class ClassroomCourseStudent(db.Model):
+class CourseStudent(db.Model):
+    """
+    课程学生关联（只读访问）
+    
+    ⚠️ 只读访问 classroom_database.course_students
+    数据来源：排课发布时由 course_schedule_service 同步写入
+    用途：查询课程选课学生、成绩
+    """
     __bind_key__ = "classroom"
     __tablename__ = "course_students"
     id = db.Column(db.Integer, primary_key=True)
@@ -362,10 +396,10 @@ def get_teacher_courses(user):
     teacher_id = user["user_id"]
 
     # 主要数据源：classroom_database.courses
-    cl_courses = ClassroomCourse.query.filter_by(teacher_id=teacher_id).all()
+    cl_courses = Course.query.filter_by(teacher_id=teacher_id).all()
     result = []
     for c in cl_courses:
-        student_count = ClassroomCourseStudent.query.filter_by(course_id=c.id).count()
+        student_count = CourseStudent.query.filter_by(course_id=c.id).count()
         result.append({
             "course_id": c.id,
             "course_code": c.code,
@@ -376,28 +410,6 @@ def get_teacher_courses(user):
             "credits": c.credits,
             "enrollment_count": student_count,
             "source": "classroom",
-        })
-
-    # 补充数据源：main_database.courses（历史数据）
-    courses = Course.query.filter_by(teacher_id=teacher_id).all()
-    for c in courses:
-        # 跳过已存在于 classroom 中的课程（按名称去重）
-        existing_names = {item["course_name"] for item in result}
-        if c.name in existing_names:
-            continue
-        enrollment_count = CourseEnrollment.query.filter_by(course_id=c.id).count()
-        result.append({
-            "course_id": c.id,
-            "course_code": c.code,
-            "course_name": c.name,
-            "description": c.description,
-            "class_time": None,
-            "location": None,
-            "credits": None,
-            "target_grade": c.target_grade,
-            "target_major": c.target_major,
-            "enrollment_count": enrollment_count,
-            "source": "main",
         })
 
     return jsonify({"success": True, "data": result})
@@ -411,9 +423,9 @@ def get_teacher_course_grades(user):
     result = []
 
     # 主要数据源：classroom_database
-    cl_courses = ClassroomCourse.query.filter_by(teacher_id=teacher_id).all()
+    cl_courses = Course.query.filter_by(teacher_id=teacher_id).all()
     for c in cl_courses:
-        students = ClassroomCourseStudent.query.filter_by(course_id=c.id).all()
+        students = CourseStudent.query.filter_by(course_id=c.id).all()
         for cs in students:
             student = db.session.get(Student, cs.student_id)
             result.append({
@@ -457,9 +469,9 @@ def get_teacher_schedule(user):
     result = []
 
     # 主要数据源：classroom_database.courses
-    cl_courses = ClassroomCourse.query.filter_by(teacher_id=teacher_id).all()
+    cl_courses = Course.query.filter_by(teacher_id=teacher_id).all()
     for c in cl_courses:
-        student_count = ClassroomCourseStudent.query.filter_by(course_id=c.id).count()
+        student_count = CourseStudent.query.filter_by(course_id=c.id).count()
         result.append({
             "course_name": c.name,
             "course_code": c.code,
@@ -577,7 +589,7 @@ def admin_list_grades(user):
 @require_auth("admin")
 def admin_list_classroom_courses(user):
     """管理员查询课堂教学服务的所有课程信息"""
-    courses = ClassroomCourse.query.all()
+    courses = Course.query.all()
     result = [{
         "id": c.id,
         "code": c.code,
@@ -818,22 +830,47 @@ WHERE cs.final_grade < 60 AND cs.final_grade IS NOT NULL
 
 
 def execute_safe_sql(sql, user_type):
-    """安全执行 SQL 语句"""
+    """安全执行 SQL 语句（加强版）"""
     sql_upper = sql.strip().upper()
 
-    # 检查危险操作
-    dangerous_keywords = ["DROP", "TRUNCATE", "ALTER", "CREATE DATABASE"]
+    # 1. 危险操作过滤
+    dangerous_keywords = ["DROP", "TRUNCATE", "ALTER", "CREATE DATABASE", "CREATE TABLE"]
     for kw in dangerous_keywords:
         if kw in sql_upper:
             return None, f"禁止执行危险操作: {kw}"
 
-    # 非管理员禁止修改操作
+    # 2. 非管理员禁止修改
     modify_keywords = ["INSERT", "UPDATE", "DELETE"]
     if user_type != "admin":
         for kw in modify_keywords:
             if sql_upper.startswith(kw):
                 return None, "当前角色无权执行修改操作"
 
+    # 3. 🔴 新增：禁止跨库修改
+    forbidden_databases = [
+        'classroom_database', 'course_schedule_database',
+        'users_database', 'campus_wall_database'
+    ]
+    for db_name in forbidden_databases:
+        if db_name in sql:
+            return None, f"禁止修改 {db_name} 的数据"
+
+    # 4. 🔴 新增：限制可修改的表（白名单）
+    if any(kw in sql_upper for kw in modify_keywords):
+        allowed_tables = ['course_grades', 'course_enrollments']
+        table_found = False
+        for table in allowed_tables:
+            if table.upper() in sql_upper:
+                table_found = True
+                break
+        if not table_found:
+            return None, f"只能修改以下表: {', '.join(allowed_tables)}"
+
+    # 5. 🔴 新增：记录审计日志
+    if any(kw in sql_upper for kw in modify_keywords):
+        log_audit_operation(user_type, sql)
+
+    # 6. 执行 SQL（强制限定 main_database）
     try:
         import pymysql
         conn = pymysql.connect(
@@ -842,6 +879,7 @@ def execute_safe_sql(sql, user_type):
             user=DB_USER,
             password=DB_PASS_RAW,
             charset="utf8mb4",
+            database="main_database"  # 🔴 强制限定数据库
         )
         cursor = conn.cursor(pymysql.cursors.DictCursor)
         cursor.execute(sql)
@@ -862,6 +900,13 @@ def execute_safe_sql(sql, user_type):
             return {"affected_rows": affected}, None
     except Exception as e:
         return None, str(e)
+
+
+def log_audit_operation(user_type, sql):
+    """记录审计日志"""
+    import logging
+    logger = logging.getLogger('query_service.audit')
+    logger.warning(f"Agent 修改操作 | 角色: {user_type} | SQL: {sql[:100]}...")
 
 
 def call_deepseek_api(messages):
@@ -983,4 +1028,4 @@ def health_check():
 # ============ 启动 ============
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5002, debug=True)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5005)), debug=True)
