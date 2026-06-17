@@ -1,0 +1,114 @@
+[
+  {
+    "teacher_id": "1001",
+    "password": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+    "college": "计算机学院",
+    "title": "教授",
+    "name": "陆思阳"
+  },
+  {
+    "teacher_id": "1002",
+    "password": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+    "college": "计算机学院",
+    "title": "副教授",
+    "name": "王靖"
+  },
+  {
+    "teacher_id": "1003",
+    "password": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+    "college": "软件学院",
+    "title": "教授",
+    "name": "欧小宇"
+  },
+  {
+    "teacher_id": "1004",
+    "password": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+    "college": "软件学院",
+    "title": "教授",
+    "name": "林清华"
+  },
+  {
+    "teacher_id": "1005",
+    "password": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+    "college": "软件学院",
+    "title": "副教授",
+    "name": "张明德"
+  },
+  {
+    "teacher_id": "1006",
+    "password": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+    "college": "计算机与信息技术学院",
+    "title": "副教授",
+    "name": "刘雪梅"
+  },
+  {
+    "teacher_id": "1007",
+    "password": "cde383eee8ee7a4400adf7a15f716f179a2eb97646b37e089eb8d6d04e663416",
+    "college": "软件学院",
+    "title": "教授",
+    "name": "赵建国"
+  },
+  {
+    "teacher_id": "1008",
+    "password": "cde383eee8ee7a4400adf7a15f716f179a2eb97646b37e089eb8d6d04e663416",
+    "college": "数学学院",
+    "title": "副教授",
+    "name": "孙丽华"
+  },
+  {
+    "teacher_id": "1009",
+    "password": "cde383eee8ee7a4400adf7a15f716f179a2eb97646b37e089eb8d6d04e663416",
+    "college": "信息工程学院",
+    "title": "助教",
+    "name": "周文杰"
+  },
+  {
+    "teacher_id": "1010",
+    "password": "cde383eee8ee7a4400adf7a15f716f179a2eb97646b37e089eb8d6d04e663416",
+    "college": "计算机学院",
+    "title": "副教授",
+    "name": "吴秀英"
+  },
+  {
+    "teacher_id": "1011",
+    "password": "cde383eee8ee7a4400adf7a15f716f179a2eb97646b37e089eb8d6d04e663416",
+    "college": "计算机学院",
+    "title": "讲师",
+    "name": "郑伟民"
+  },
+  {
+    "teacher_id": "1012",
+    "password": "cde383eee8ee7a4400adf7a15f716f179a2eb97646b37e089eb8d6d04e663416",
+    "college": "计算机学院",
+    "title": "讲师",
+    "name": "王海燕"
+  },
+  {
+    "teacher_id": "1013",
+    "password": "cde383eee8ee7a4400adf7a15f716f179a2eb97646b37e089eb8d6d04e663416",
+    "college": "人工智能学院",
+    "title": "讲师",
+    "name": "冯志强"
+  },
+  {
+    "teacher_id": "1014",
+    "password": "cde383eee8ee7a4400adf7a15f716f179a2eb97646b37e089eb8d6d04e663416",
+    "college": "人工智能学院",
+    "title": "讲师",
+    "name": "陈玉兰"
+  },
+  {
+    "teacher_id": "1015",
+    "password": "cde383eee8ee7a4400adf7a15f716f179a2eb97646b37e089eb8d6d04e663416",
+    "college": "计算机学院",
+    "title": "副教授",
+    "name": "褚国庆"
+  },
+  {
+    "teacher_id": "1016",
+    "password": "cde383eee8ee7a4400adf7a15f716f179a2eb97646b37e089eb8d6d04e663416",
+    "college": "计算机学院",
+    "title": "助教",
+    "name": "卫红梅"
+  }
+]

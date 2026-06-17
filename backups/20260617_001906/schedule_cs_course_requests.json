@@ -1,0 +1,29 @@
+[
+  {
+    "id": 90,
+    "student_id": "20230001",
+    "course_id": "S001",
+    "section_id": "SEC-S001",
+    "preference_level": 1,
+    "status": "scheduled",
+    "created_at": "2026-06-16T23:58:02"
+  },
+  {
+    "id": 91,
+    "student_id": "20230002",
+    "course_id": "S008",
+    "section_id": "SEC-S008",
+    "preference_level": 2,
+    "status": "scheduled",
+    "created_at": "2026-06-16T23:58:02"
+  },
+  {
+    "id": 92,
+    "student_id": "20240001",
+    "course_id": "S001",
+    "section_id": "S001-01",
+    "preference_level": 1,
+    "status": "scheduled",
+    "created_at": "2026-06-17T00:15:27"
+  }
+]

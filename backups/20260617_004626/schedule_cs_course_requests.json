@@ -1,0 +1,20 @@
+[
+  {
+    "id": 93,
+    "student_id": "20240001",
+    "course_id": "S001",
+    "section_id": "S001-01",
+    "preference_level": 1,
+    "status": "scheduled",
+    "created_at": "2026-06-17T00:41:36"
+  },
+  {
+    "id": 94,
+    "student_id": "20240001",
+    "course_id": "S008",
+    "section_id": "S008-01",
+    "preference_level": 2,
+    "status": "scheduled",
+    "created_at": "2026-06-17T00:41:39"
+  }
+]

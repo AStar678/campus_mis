@@ -1,0 +1,47 @@
+[
+  {
+    "id": 1,
+    "warehouse_code": "A",
+    "warehouse_name": "A仓库",
+    "shelf_code": "01",
+    "shelf_name": "01号货架",
+    "remark": null,
+    "create_time": "2026-04-25T23:35:17"
+  },
+  {
+    "id": 2,
+    "warehouse_code": "A",
+    "warehouse_name": "A仓库",
+    "shelf_code": "02",
+    "shelf_name": "02号货架",
+    "remark": null,
+    "create_time": "2026-04-25T23:35:17"
+  },
+  {
+    "id": 3,
+    "warehouse_code": "A",
+    "warehouse_name": "A仓库",
+    "shelf_code": "03",
+    "shelf_name": "03号货架",
+    "remark": null,
+    "create_time": "2026-04-25T23:35:17"
+  },
+  {
+    "id": 4,
+    "warehouse_code": "B",
+    "warehouse_name": "B仓库",
+    "shelf_code": "01",
+    "shelf_name": "01号货架",
+    "remark": null,
+    "create_time": "2026-04-25T23:35:17"
+  },
+  {
+    "id": 5,
+    "warehouse_code": "B",
+    "warehouse_name": "B仓库",
+    "shelf_code": "02",
+    "shelf_name": "02号货架",
+    "remark": null,
+    "create_time": "2026-04-25T23:35:17"
+  }
+]

@@ -45,6 +45,7 @@ app.config["SQLALCHEMY_DATABASE_URI"] = (
 )
 app.config["SQLALCHEMY_BINDS"] = {
     "main": f"mysql+pymysql://{DB_USER}:{DB_PASS_QUOTED}@{DB_HOST}:{DB_PORT}/{MAIN_DB_NAME}",
+    "users": f"mysql+pymysql://{DB_USER}:{DB_PASS_QUOTED}@{DB_HOST}:{DB_PORT}/users_database",
 }
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
@@ -81,6 +82,19 @@ class BuildingAdjacency(db.Model):
     building_a = db.Column(db.Integer, nullable=False)
     building_b = db.Column(db.Integer, nullable=False)
     distance = db.Column(db.Float, nullable=False)
+
+
+class Teacher(db.Model):
+    """教师基础信息，只读映射 users_database.teachers。"""
+
+    __bind_key__ = "users"
+    __tablename__ = "teachers"
+
+    teacher_id = db.Column(db.String(4), primary_key=True)
+    password = db.Column(db.String(128), nullable=False)
+    college = db.Column(db.String(50))
+    title = db.Column(db.String(20))
+    name = db.Column(db.String(50), default="")
 
 
 # 选课排课业务表，由本服务独立维护，统一使用 cs_ 表名前缀。
@@ -210,7 +224,7 @@ class SelectionBatch(db.Model):
     __tablename__ = "cs_selection_batches"
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    term_name = db.Column(db.String(80), nullable=False, default="2025-2026 学年第二学期")
+    term_name = db.Column(db.String(80), nullable=False, default="2025-2026-2")
     phase = db.Column(db.String(30), nullable=False, default="selecting")
     phase_label = db.Column(db.String(50), nullable=False, default="正式选课阶段")
     start_at = db.Column(db.DateTime)
@@ -336,22 +350,9 @@ def course_category(course):
 
     code = str(course.course_id or "").upper()
     name = str(course.course_name or "")
-    required_keywords = (
-        "必修",
-        "基础",
-        "高等数学",
-        "大学物理",
-        "程序设计",
-        "面向对象",
-        "数字逻辑",
-        "微机原理",
-        "信号与系统",
-        "通信原理",
-    )
     if code.startswith("PUB") or any(keyword in name for keyword in ("公共", "体育", "英语", "思政")):
         return "PUB"
-    if code.startswith("REQ") or any(keyword in name for keyword in required_keywords):
-        return "REQ"
+    # 所有非公共课均视为选修课，不再区分必修（REQ）与选修（ELE）
     return "ELE"
 
 
@@ -1060,8 +1061,6 @@ def create_course_section(_user, course_id):
         return jsonify({"success": False, "message": "课程不存在"}), 404
 
     data = request.get_json() or {}
-    if not data.get("section_name"):
-        return jsonify({"success": False, "message": "section_name 必填"}), 400
     try:
         capacity = parse_positive_int(data.get("capacity"), "capacity", course.capacity)
     except ValueError as exc:
@@ -1072,13 +1071,17 @@ def create_course_section(_user, course_id):
     if db.session.get(CourseSection, section_id):
         return jsonify({"success": False, "message": "教学班编号已存在"}), 409
 
+    # 自动生成教学班名称，自动使用课程的教师
+    auto_name = data.get("section_name") or f"{course.course_name} {section_count + 1:02d}班"
+    auto_teacher = data.get("teacher_id") or course.teacher_id
+
     section = CourseSection(
         section_id=section_id,
         course_id=course_id,
-        section_name=data["section_name"],
-        teacher_id=data.get("teacher_id"),
+        section_name=auto_name,
+        teacher_id=auto_teacher,
         capacity=capacity,
-        preferred_building=data.get("preferred_building"),
+        preferred_building=data.get("preferred_building") or course.preferred_building,
         required_room_type=data.get("required_room_type") or "普通教室",
         unavailable_slot_ids=data.get("unavailable_slot_ids") or "",
         status=data.get("status", "open"),
@@ -1168,6 +1171,32 @@ def list_classrooms(_user):
     return jsonify({"success": True, "data": [serialize_classroom(classroom) for classroom in classrooms]})
 
 
+@app.route("/api/course-schedule/teachers", methods=["GET"])
+@require_auth("admin")
+def list_teachers(_user):
+    """查询教师列表，仅管理员可访问。"""
+
+    teachers = Teacher.query.order_by(Teacher.teacher_id).all()
+    return jsonify({"success": True, "data": [{
+        "teacher_id": t.teacher_id,
+        "name": t.name or t.teacher_id,
+        "college": t.college or "",
+        "title": t.title or "",
+    } for t in teachers]})
+
+
+@app.route("/api/course-schedule/buildings", methods=["GET"])
+@require_auth("admin")
+def list_buildings(_user):
+    """查询楼栋列表，仅管理员可访问。"""
+
+    buildings = Building.query.order_by(Building.building_id).all()
+    return jsonify({"success": True, "data": [{
+        "id": b.building_id,
+        "name": b.building_name,
+    } for b in buildings]})
+
+
 @app.route("/api/course-schedule/time-slots", methods=["POST"])
 @require_auth("admin")
 def create_time_slot(_user):
@@ -1214,8 +1243,6 @@ def submit_course_request(user):
         return jsonify({"success": False, "message": "课程不存在"}), 404
     if course.status != "open":
         return jsonify({"success": False, "message": "当前课程未开放选课"}), 400
-    if course_id.upper().startswith("REQ") or "必修" in course.course_name or "基础" in course.course_name:
-        return jsonify({"success": False, "message": "必修课由培养方案保障，不需要提交选课意向"}), 400
     eligible, eligibility_message = check_course_eligibility(course, user["user_id"])
     if not eligible:
         return jsonify({"success": False, "message": eligibility_message}), 400
@@ -1497,7 +1524,8 @@ def publish_results(_user):
     同步规则：
     - 仅同步 status='scheduled' 的选课申请
     - 按课程名称匹配 cs_courses.course_name ↔ classroom_database.courses.name
-    - 如果 classroom 中无对应课程，则跳过（需手动处理）
+    - 课程时间/地点按 课程名+学期 匹配，不存在则 INSERT，存在则 UPDATE
+    - 学生同步带上 semester 字段，不同学期数据独立
     
     数据流向：
     cs_course_requests (选课申请) → cs_schedule_results (排课结果)
@@ -1512,30 +1540,38 @@ def publish_results(_user):
     updated = ScheduleResult.query.update({"is_published": True})
     db.session.commit()
     
-    # 🔴 新增：发布后同步选课学生到 classroom_database.course_students
-    sync_count = _sync_scheduled_students_to_classroom()
+    # 获取当前活跃批次的学期标识
+    active_batch = get_active_batch()
+    semester = active_batch.term_name if active_batch else "2025-2026-2"
+    
+    # 先同步课程时间/地点到 classroom_database.courses（课程名+学期）
+    course_sync_count = _sync_course_time_location_to_classroom(semester)
+    
+    # 再同步选课学生到 classroom_database.course_students（带学期）
+    sync_count = _sync_scheduled_students_to_classroom(semester)
     
     return jsonify({
         "success": True,
         "message": f"已发布 {updated} 条排课结果",
-        "synced_students": sync_count
+        "synced_students": sync_count,
+        "synced_courses": course_sync_count
     })
 
 
-def _sync_scheduled_students_to_classroom():
+def _sync_scheduled_students_to_classroom(semester):
     """
     将 scheduled 状态的选课学生同步到 classroom_database.course_students。
     
     同步逻辑：
     1. 查询所有 status='scheduled' 的选课申请
-    2. 按课程名称匹配 classroom_database.courses
-    3. 将匹配成功的学生插入 classroom_database.course_students（去重）
+    2. 按课程名称 + 学期匹配 classroom_database.courses
+    3. 将匹配成功的学生插入 classroom_database.course_students（带 semester）
     
     返回：成功同步的学生数量
     
     ⚠️ 跨库同步限制：
     - course_schedule_database 和 classroom_database 维护独立的课程目录
-    - 只有名称完全匹配的课程才能自动同步
+    - 只有名称+学期完全匹配的课程才能自动同步
     - 名称不匹配的课程需要管理员手动处理
     """
     import pymysql
@@ -1568,31 +1604,34 @@ def _sync_scheduled_students_to_classroom():
         )
         cl_cur = cl_conn.cursor(pymysql.cursors.DictCursor)
         
-        # 获取 classroom.courses 的 name→id 映射
-        cl_cur.execute("SELECT id, name FROM courses")
-        cl_courses = {r['name']: r['id'] for r in cl_cur.fetchall()}
+        # 获取 classroom.courses 的 (name, semester)→id 映射
+        cl_cur.execute("SELECT id, name, semester FROM courses")
+        cl_courses = {}  # key: (name, semester) → id
+        for r in cl_cur.fetchall():
+            cl_courses[(r['name'], r['semester'])] = r['id']
         
-        # 获取已存在的 course_students（去重）
-        cl_cur.execute("SELECT student_id, course_id FROM course_students")
-        existing = {(r['student_id'], r['course_id']) for r in cl_cur.fetchall()}
+        # 本次同步已处理集合（防止同一批次内重复插入）
+        synced_in_batch = set()
         
         # 同步
         for row in scheduled:
             course_name = row[2]  # course_name
             student_id = row[0]   # student_id
             
-            if course_name in cl_courses:
-                cl_course_id = cl_courses[course_name]
-                if (student_id, cl_course_id) not in existing:
+            course_key = (course_name, semester)
+            if course_key in cl_courses:
+                cl_course_id = cl_courses[course_key]
+                entry_key = (student_id, cl_course_id, semester)
+                if entry_key not in synced_in_batch:
                     cl_cur.execute(
-                        "INSERT INTO course_students (course_id, student_id, final_grade) VALUES (%s, %s, NULL)",
-                        (cl_course_id, student_id)
+                        "INSERT INTO course_students (course_id, student_id, semester, final_grade) VALUES (%s, %s, %s, NULL)",
+                        (cl_course_id, student_id, semester)
                     )
-                    existing.add((student_id, cl_course_id))
+                    synced_in_batch.add(entry_key)
                     sync_count += 1
             else:
                 logger.warning(
-                    f"跨库同步跳过: 课程「{course_name}」不在 classroom_database.courses 中，"
+                    f"跨库同步跳过: 课程「{course_name}」(学期={semester}) 不在 classroom_database.courses 中，"
                     f"学生={student_id} 需手动处理"
                 )
         
@@ -1601,7 +1640,7 @@ def _sync_scheduled_students_to_classroom():
         cl_conn.close()
         
         if sync_count > 0:
-            logger.info(f"跨库同步完成: {sync_count} 名学生已同步到 classroom_database.course_students")
+            logger.info(f"跨库同步完成: {sync_count} 名学生已同步到 classroom_database.course_students (学期={semester})")
         
     except Exception as e:
         logger.error(f"跨库同步失败: {e}")
@@ -1609,6 +1648,379 @@ def _sync_scheduled_students_to_classroom():
         traceback.print_exc()
     
     return sync_count
+
+
+def _sync_courses_to_classroom(semester):
+    """
+    将排课端的课程（cs_courses）同步到课堂管理端（classroom_database.courses）。
+    
+    同步规则：
+    - 读取 cs_courses 中所有课程
+    - 按 课程名称+学期 匹配 classroom_database.courses
+    - 不存在则 INSERT（自动生成 CLS 编号），已存在则跳过（保留课堂端已有数据）
+    - 字段映射：course_name→name, teacher_id→teacher_id, credits→credits
+    """
+    import pymysql
+    _DB_PASS = os.getenv("DB_PASS", "")
+    _DB_PASS_RAW = unquote(_DB_PASS)
+    
+    inserted = 0
+    skipped = 0
+    
+    try:
+        # 读取所有排课端课程
+        cs_courses = db.session.execute(
+            db.text("""
+                SELECT c.course_id, c.course_name, c.teacher_id, c.credits,
+                       COALESCE(s.teacher_id, c.teacher_id) AS section_teacher_id
+                FROM cs_courses c
+                LEFT JOIN cs_course_sections s ON c.course_id = s.course_id
+                WHERE c.status = 'open'
+            """)
+        ).fetchall()
+        
+        if not cs_courses:
+            return 0, 0
+        
+        # 去重（同一课程可能有多个 section）
+        seen = {}
+        for row in cs_courses:
+            course_name = row[1]
+            if course_name not in seen:
+                seen[course_name] = {
+                    "course_name": course_name,
+                    "teacher_id": row[4] or row[2] or "",  # section teacher 优先
+                    "credits": float(row[3]) if row[3] else 2.0,
+                }
+        
+        cl_conn = pymysql.connect(
+            host=DB_HOST, port=DB_PORT,
+            user=DB_USER, password=_DB_PASS_RAW,
+            database="classroom_database", charset="utf8mb4"
+        )
+        cl_cur = cl_conn.cursor(pymysql.cursors.DictCursor)
+        
+        # 获取已有课程的 (name, semester)→id 映射 + 最大 code 编号
+        cl_cur.execute("SELECT id, name, semester, code FROM courses")
+        existing = {}
+        max_code_num = 0
+        for r in cl_cur.fetchall():
+            existing[(r['name'], r['semester'])] = r
+            code = r.get('code') or ''
+            if code.startswith('CLS'):
+                try:
+                    num = int(code[3:])
+                    if num > max_code_num:
+                        max_code_num = num
+                except ValueError:
+                    pass
+        
+        for name, info in seen.items():
+            key = (name, semester)
+            if key in existing:
+                skipped += 1
+                continue
+            
+            # 生成新课编号
+            max_code_num += 1
+            new_code = f"CLS{max_code_num:03d}"
+            
+            cl_cur.execute(
+                """INSERT INTO courses 
+                   (semester, name, teacher_id, code, credits, language, course_type, 
+                    teaching_method, target_grade, target_major, description, class_time, location)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                (semester, name, info['teacher_id'], new_code, info['credits'],
+                 '中文', '选修', '线下', '', '', '', '', '')
+            )
+            inserted += 1
+        
+        cl_conn.commit()
+        cl_cur.close()
+        cl_conn.close()
+        
+        logger.info(f"课程同步完成 (学期={semester}): {inserted} 门新课, {skipped} 门已存在")
+        return inserted, skipped
+        
+    except Exception as e:
+        logger.error(f"同步课程到课堂失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return 0, 0
+
+
+def _sync_course_time_location_to_classroom(semester):
+    """
+    将排课结果中的时间和教室信息同步到 classroom_database.courses。
+    
+    同步规则：
+    - 查询已发布的 cs_schedule_results，关联 cs_time_slots 和 cs_courses
+    - 按 课程名称+学期 匹配 classroom_database.courses
+    - 如果课程名+学期不存在则 INSERT 新课程，存在则 UPDATE 时间和地点
+    - class_time 格式：{slot_label} {start_time}-{end_time}（如"周一 1-2节 08:00-09:40"）
+    """
+    try:
+        results = db.session.execute(
+            db.text("""
+                SELECT c.course_name, r.classroom_id, s.label, s.start_time, s.end_time
+                FROM cs_schedule_results r
+                JOIN cs_courses c ON r.course_id = c.course_id
+                JOIN cs_time_slots s ON r.slot_id = s.slot_id
+                WHERE r.is_published = 1
+            """)
+        ).fetchall()
+        
+        if not results:
+            return 0
+        
+        _DB_PASS = os.getenv("DB_PASS", "")
+        _DB_PASS_RAW = unquote(_DB_PASS)
+        
+        cl_conn = pymysql.connect(
+            host=DB_HOST, port=DB_PORT,
+            user=DB_USER, password=_DB_PASS_RAW,
+            database="classroom_database", charset="utf8mb4"
+        )
+        cl_cur = cl_conn.cursor(pymysql.cursors.DictCursor)
+        
+        # 获取现有课程的 (name, semester)→id 映射
+        cl_cur.execute("SELECT id, name, semester FROM courses")
+        existing_courses = {(r['name'], r['semester']): r['id'] for r in cl_cur.fetchall()}
+        
+        inserted = 0
+        updated = 0
+        for row in results:
+            course_name = row[0]
+            classroom_id = row[1]
+            slot_label = row[2] or ""
+            start_time = row[3] or ""
+            end_time = row[4] or ""
+            class_time = f"{slot_label} {start_time}-{end_time}".strip()
+            
+            course_key = (course_name, semester)
+            if course_key in existing_courses:
+                # 同一学期内 UPDATE
+                cl_cur.execute(
+                    "UPDATE courses SET class_time = %s, location = %s WHERE id = %s",
+                    (class_time, classroom_id, existing_courses[course_key])
+                )
+                updated += cl_cur.rowcount
+            else:
+                # 新学期新课程：INSERT
+                cl_cur.execute(
+                    "INSERT INTO courses (name, semester, class_time, location) VALUES (%s, %s, %s, %s)",
+                    (course_name, semester, class_time, classroom_id)
+                )
+                new_id = cl_cur.lastrowid
+                existing_courses[course_key] = new_id
+                inserted += 1
+        
+        cl_conn.commit()
+        cl_cur.close()
+        cl_conn.close()
+        
+        if inserted > 0 or updated > 0:
+            logger.info(f"课程时间/地点同步完成: {inserted} 门新课已插入, {updated} 门课程已更新 (学期={semester})")
+        return inserted + updated
+        
+    except Exception as e:
+        logger.error(f"同步课程时间/地点失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return 0
+
+
+@app.route("/api/course-schedule/sync-to-classroom", methods=["POST"])
+@require_auth("admin")
+def sync_to_classroom(_user):
+    """
+    学期结束：将排课结果完整同步到课堂管理系统，并清空排课数据。
+
+    完整流程：
+    1. 导出 classroom_database 旧数据到备份文件
+    2. 导出 course_schedule_database 当前数据到备份文件
+    3. 清空 classroom_database.course_students
+    4. 从已发布排课结果重建 course_students（按课程名匹配）
+    5. 清空 course_schedule_database 操作数据
+
+    返回：各步骤执行结果
+    """
+    import pymysql
+    from datetime import datetime as dt
+    from decimal import Decimal
+
+    _DB_PASS = os.getenv("DB_PASS", "")
+    _DB_PASS_RAW = unquote(_DB_PASS)
+    timestamp = dt.now().strftime("%Y%m%d_%H%M%S")
+    backup_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backups", timestamp)
+    os.makedirs(backup_dir, exist_ok=True)
+
+    def _serialize(val):
+        if isinstance(val, dt):
+            return val.isoformat()
+        if isinstance(val, Decimal):
+            return float(val)
+        if isinstance(val, bytes):
+            return val.decode("utf-8", errors="replace")
+        return val
+
+    report = {"backup_dir": backup_dir, "steps": []}
+
+    # ── 1. 导出 classroom_database ──
+    try:
+        cl_conn = pymysql.connect(
+            host=DB_HOST, port=DB_PORT, user=DB_USER, password=_DB_PASS_RAW,
+            database="classroom_database", charset="utf8mb4"
+        )
+        cl_cur = cl_conn.cursor(pymysql.cursors.DictCursor)
+
+        for table in ["courses", "course_students"]:
+            cl_cur.execute(f"SELECT * FROM {table}")
+            rows = cl_cur.fetchall()
+            for row in rows:
+                for k, v in row.items():
+                    row[k] = _serialize(v)
+            path = os.path.join(backup_dir, f"classroom_{table}.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(rows, f, ensure_ascii=False, indent=2)
+            report["steps"].append(f"导出 classroom.{table}: {len(rows)} 行")
+
+        cl_cur.close()
+        cl_conn.close()
+    except Exception as e:
+        report["steps"].append(f"❌ 导出 classroom 失败: {e}")
+        return jsonify({"success": False, "message": f"备份课堂数据失败: {e}", "report": report}), 500
+
+    # ── 2. 导出 course_schedule_database ──
+    try:
+        sch_conn = pymysql.connect(
+            host=DB_HOST, port=DB_PORT, user=DB_USER, password=_DB_PASS_RAW,
+            database="course_schedule_database", charset="utf8mb4"
+        )
+        sch_cur = sch_conn.cursor(pymysql.cursors.DictCursor)
+
+        for table in ["cs_course_requests", "cs_schedule_results", "cs_schedule_runs", "cs_courses", "cs_course_sections"]:
+            sch_cur.execute(f"SELECT * FROM {table}")
+            rows = sch_cur.fetchall()
+            for row in rows:
+                for k, v in row.items():
+                    row[k] = _serialize(v)
+            path = os.path.join(backup_dir, f"schedule_{table}.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(rows, f, ensure_ascii=False, indent=2)
+            report["steps"].append(f"导出 schedule.{table}: {len(rows)} 行")
+
+        sch_cur.close()
+        sch_conn.close()
+    except Exception as e:
+        report["steps"].append(f"❌ 导出排课数据失败: {e}")
+        return jsonify({"success": False, "message": f"备份排课数据失败: {e}", "report": report}), 500
+
+    # 获取当前活跃批次的学期标识
+    active_batch = get_active_batch()
+    semester = active_batch.term_name if active_batch else "2025-2026-2"
+
+    # ── 3. 清空 classroom_database 当前学期数据 ──
+    try:
+        cl_conn = pymysql.connect(
+            host=DB_HOST, port=DB_PORT, user=DB_USER, password=_DB_PASS_RAW,
+            database="classroom_database", charset="utf8mb4"
+        )
+        cl_cur = cl_conn.cursor()
+        cl_cur.execute("SET FOREIGN_KEY_CHECKS=0")
+        cl_cur.execute("DELETE FROM course_students WHERE semester = %s", (semester,))
+        cl_cur.execute("SET FOREIGN_KEY_CHECKS=1")
+        cl_conn.commit()
+        report["steps"].append(f"清空 classroom.course_students (学期={semester}): {cl_cur.rowcount} 行")
+        cl_cur.close()
+        cl_conn.close()
+    except Exception as e:
+        report["steps"].append(f"❌ 清空课堂学生表失败: {e}")
+        return jsonify({"success": False, "message": f"清空课堂数据失败: {e}", "report": report}), 500
+
+    # ── 3.5 同步排课端课程到课堂管理端（课程名+学期不存在则 INSERT）──
+    try:
+        course_inserted, course_skipped = _sync_courses_to_classroom(semester)
+        report["steps"].append(f"同步课程到 classroom (学期={semester}): 新增 {course_inserted} 门, 跳过 {course_skipped} 门（已存在）")
+    except Exception as e:
+        report["steps"].append(f"❌ 同步课程失败: {e}")
+
+    # ── 4. 从排课结果重建 course_students ──
+    synced = 0
+    skipped = 0
+    try:
+        scheduled = db.session.execute(
+            db.text("""
+                SELECT r.student_id, r.course_id, c.course_name
+                FROM cs_course_requests r
+                JOIN cs_courses c ON r.course_id = c.course_id
+                WHERE r.status = 'scheduled'
+            """)
+        ).fetchall()
+
+        cl_conn = pymysql.connect(
+            host=DB_HOST, port=DB_PORT, user=DB_USER, password=_DB_PASS_RAW,
+            database="classroom_database", charset="utf8mb4"
+        )
+        cl_cur = cl_conn.cursor(pymysql.cursors.DictCursor)
+        cl_cur.execute("SELECT id, name, semester FROM courses")
+        cl_courses = {}  # key: (name, semester) → id
+        for r in cl_cur.fetchall():
+            cl_courses[(r['name'], r['semester'])] = r['id']
+        synced_in_batch = set()
+
+        for row in scheduled:
+            course_name = row[2]
+            student_id = row[0]
+            course_key = (course_name, semester)
+            if course_key in cl_courses:
+                cl_course_id = cl_courses[course_key]
+                entry_key = (student_id, cl_course_id, semester)
+                if entry_key not in synced_in_batch:
+                    cl_cur.execute(
+                        "INSERT INTO course_students (course_id, student_id, semester, final_grade) VALUES (%s, %s, %s, NULL)",
+                        (cl_course_id, student_id, semester)
+                    )
+                    synced_in_batch.add(entry_key)
+                    synced += 1
+            else:
+                skipped += 1
+
+        cl_conn.commit()
+        cl_cur.close()
+        cl_conn.close()
+        report["steps"].append(f"同步学生到 classroom (学期={semester}): {synced} 人, 跳过 {skipped} 人（课程名不匹配）")
+
+        # ── 4.5 同步课程时间/地点到 classroom_database.courses ──
+        time_updated = _sync_course_time_location_to_classroom(semester)
+        report["steps"].append(f"更新课程时间/地点 (学期={semester}): {time_updated} 门课程")
+
+    except Exception as e:
+        report["steps"].append(f"❌ 同步学生失败: {e}")
+        return jsonify({"success": False, "message": f"同步学生数据失败: {e}", "report": report}), 500
+
+    # ── 5. 清空 course_schedule_database 操作数据 ──
+    try:
+        sch_conn = pymysql.connect(
+            host=DB_HOST, port=DB_PORT, user=DB_USER, password=_DB_PASS_RAW,
+            database="course_schedule_database", charset="utf8mb4"
+        )
+        sch_cur = sch_conn.cursor()
+        sch_cur.execute("SET FOREIGN_KEY_CHECKS=0")
+        sch_cur.execute("DELETE FROM cs_schedule_results")
+        sch_cur.execute("DELETE FROM cs_course_requests")
+        sch_cur.execute("DELETE FROM cs_schedule_runs")
+        sch_cur.execute("SET FOREIGN_KEY_CHECKS=1")
+        sch_conn.commit()
+        report["steps"].append(f"清空排课数据库操作表完成")
+        sch_cur.close()
+        sch_conn.close()
+    except Exception as e:
+        report["steps"].append(f"❌ 清空排课数据失败: {e}")
+        return jsonify({"success": False, "message": f"清空排课数据失败: {e}", "report": report}), 500
+
+    report["steps"].append(f"✅ 全部完成：备份至 {backup_dir}，同步 {synced} 名学生，跳过 {skipped} 人")
+    return jsonify({"success": True, "message": "学期同步完成", "report": report})
 
 
 if __name__ == "__main__":

@@ -69,9 +69,30 @@
         .schedule-cell.header { background: #f7f9fb; font-weight: 700; text-align: center; min-height: auto; }
         .schedule-item { padding: 6px; border-radius: 4px; background: #edf5ff; color: #174f8c; margin-bottom: 4px; line-height: 1.4; }
 
+        .form-group { margin-bottom: 10px; }
+        .form-group label { display: block; font-size: 13px; color: #52616f; margin-bottom: 4px; }
+        .form-group input, .form-group select { width: 100%; border: 1px solid #cfd7df; border-radius: 6px; padding: 8px 10px; font-size: 14px; }
+        .form-group input:focus { outline: none; border-color: #2364aa; }
+        .form-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+        .sql-console { border: 1px solid #1f2933; border-radius: 8px; background: #1e1e2e; color: #cdd6f4; padding: 16px; font-family: "SF Mono", "Menlo", "Monaco", monospace; }
+        .sql-console textarea { width: 100%; min-height: 120px; background: #181825; color: #cdd6f4; border: 1px solid #45475a; border-radius: 6px; padding: 12px; font-size: 14px; font-family: inherit; resize: vertical; }
+        .sql-console textarea:focus { outline: none; border-color: #89b4fa; }
+        .sql-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+        .sql-toolbar select { background: #181825; color: #cdd6f4; border: 1px solid #45475a; border-radius: 6px; padding: 8px 10px; font-size: 13px; }
+        .sql-result { margin-top: 12px; max-height: 400px; overflow: auto; }
+        .sql-result table { font-size: 12px; border-color: #45475a; }
+        .sql-result th { background: #313244; color: #cdd6f4; }
+        .sql-result td { color: #a6adc8; }
+        .sql-info { color: #a6e3a1; font-size: 13px; padding: 8px 0; }
+        .sql-error { color: #f38ba8; font-size: 13px; padding: 8px 0; }
+        .btn.danger { background: #c2413a; }
+        .btn.danger:hover { background: #a6332d; }
+        .inline-form { display: flex; gap: 6px; align-items: center; }
+
         @media (max-width: 900px) {
             .stats { grid-template-columns: repeat(2, 1fr); }
             .schedule-grid { grid-template-columns: 60px repeat(5, 1fr); }
+            .form-row { grid-template-columns: repeat(2, 1fr); }
         }
     </style>
 </head>
@@ -323,6 +344,9 @@
                     <button class="tab" :class="{active: adminTab === 'teachers'}" @click="adminTab = 'teachers'">教师信息</button>
                     <button class="tab" :class="{active: adminTab === 'courses'}" @click="adminTab = 'courses'">课程信息</button>
                     <button class="tab" :class="{active: adminTab === 'grades'}" @click="adminTab = 'grades'">成绩管理</button>
+                    <button class="tab" :class="{active: adminTab === 'manage_std'}" @click="adminTab = 'manage_std'">👤 学生管理</button>
+                    <button class="tab" :class="{active: adminTab === 'manage_tch'}" @click="adminTab = 'manage_tch'">👨‍🏫 教师管理</button>
+                    <button class="tab" :class="{active: adminTab === 'sql'}" @click="switchToSqlTab()">💻 SQL控制台</button>
                     <button class="tab" :class="{active: adminTab === 'agent'}" @click="adminTab = 'agent'">AI 助手</button>
                 </div>
 
@@ -470,6 +494,127 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- 学生管理 -->
+                <div v-if="adminTab === 'manage_std'">
+                    <div class="section-head"><h2>添加学生</h2></div>
+                    <div class="form-row">
+                        <div class="form-group"><label>学号 (8位)</label><input v-model="newStudent.student_id" placeholder="如 20250001" maxlength="8"></div>
+                        <div class="form-group"><label>姓名</label><input v-model="newStudent.name" placeholder="姓名"></div>
+                        <div class="form-group"><label>密码</label><input v-model="newStudent.password" placeholder="默认 123456"></div>
+                        <div class="form-group"><label>年级</label><input v-model="newStudent.grade" placeholder="如 2025"></div>
+                        <div class="form-group"><label>专业</label><input v-model="newStudent.major" placeholder="如 软件工程"></div>
+                    </div>
+                    <button class="btn success" @click="addStudent" :disabled="!newStudent.student_id||!newStudent.name">添加学生</button>
+
+                    <div class="section-head" style="margin-top:20px;"><h2>学生列表</h2><span class="muted">点击行可编辑，操作列可删除</span></div>
+                    <div class="table-wrap" v-if="adminStudents.length">
+                        <table>
+                            <thead><tr><th>学号</th><th>姓名</th><th>年级</th><th>专业</th><th>操作</th></tr></thead>
+                            <tbody>
+                                <tr v-for="s in adminStudents" :key="s.student_id">
+                                    <td><span style="cursor:pointer;color:#2364aa" @click="editStudent(s)">{{ s.student_id }}</span></td>
+                                    <td>{{ s.name || '-' }}</td>
+                                    <td>{{ s.grade }}</td>
+                                    <td>{{ s.major }}</td>
+                                    <td><button class="btn danger" style="min-height:26px;padding:2px 8px;font-size:12px" @click="deleteStudent(s.student_id)">删除</button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- 编辑弹窗 -->
+                    <div v-if="editStudentObj" style="margin-top:16px;padding:14px;border:1px solid #fbbf24;border-radius:8px;background:#fffbeb;">
+                        <strong>编辑 {{ editStudentObj.student_id }}</strong>
+                        <div class="form-row" style="margin-top:8px;">
+                            <div class="form-group"><label>姓名</label><input v-model="editStudentObj.name"></div>
+                            <div class="form-group"><label>新密码</label><input v-model="editStudentPwd" placeholder="留空不修改"></div>
+                            <div class="form-group"><label>年级</label><input v-model="editStudentObj.grade"></div>
+                            <div class="form-group"><label>专业</label><input v-model="editStudentObj.major"></div>
+                        </div>
+                        <button class="btn" @click="saveStudent">保存</button>
+                        <button class="btn secondary" @click="editStudentObj=null" style="margin-left:8px;">取消</button>
+                    </div>
+                </div>
+
+                <!-- 教师管理 -->
+                <div v-if="adminTab === 'manage_tch'">
+                    <div class="section-head"><h2>添加教师</h2></div>
+                    <div class="form-row">
+                        <div class="form-group"><label>工号 (4位)</label><input v-model="newTeacher.teacher_id" placeholder="如 1100" maxlength="4"></div>
+                        <div class="form-group"><label>姓名</label><input v-model="newTeacher.name" placeholder="姓名"></div>
+                        <div class="form-group"><label>密码</label><input v-model="newTeacher.password" placeholder="默认 123456"></div>
+                        <div class="form-group"><label>学院</label><input v-model="newTeacher.college" placeholder="如 计算机学院"></div>
+                        <div class="form-group"><label>职称</label><input v-model="newTeacher.title" placeholder="如 教授"></div>
+                    </div>
+                    <button class="btn success" @click="addTeacher" :disabled="!newTeacher.teacher_id||!newTeacher.name">添加教师</button>
+
+                    <div class="section-head" style="margin-top:20px;"><h2>教师列表</h2></div>
+                    <div class="table-wrap" v-if="adminTeachers.length">
+                        <table>
+                            <thead><tr><th>工号</th><th>姓名</th><th>学院</th><th>职称</th><th>操作</th></tr></thead>
+                            <tbody>
+                                <tr v-for="t in adminTeachers" :key="t.teacher_id">
+                                    <td><span style="cursor:pointer;color:#2364aa" @click="editTeacher(t)">{{ t.teacher_id }}</span></td>
+                                    <td>{{ t.name || '-' }}</td>
+                                    <td>{{ t.college }}</td>
+                                    <td>{{ t.title }}</td>
+                                    <td><button class="btn danger" style="min-height:26px;padding:2px 8px;font-size:12px" @click="deleteTeacher(t.teacher_id)">删除</button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div v-if="editTeacherObj" style="margin-top:16px;padding:14px;border:1px solid #fbbf24;border-radius:8px;background:#fffbeb;">
+                        <strong>编辑 {{ editTeacherObj.teacher_id }}</strong>
+                        <div class="form-row" style="margin-top:8px;">
+                            <div class="form-group"><label>姓名</label><input v-model="editTeacherObj.name"></div>
+                            <div class="form-group"><label>新密码</label><input v-model="editTeacherPwd" placeholder="留空不修改"></div>
+                            <div class="form-group"><label>学院</label><input v-model="editTeacherObj.college"></div>
+                            <div class="form-group"><label>职称</label><input v-model="editTeacherObj.title"></div>
+                        </div>
+                        <button class="btn" @click="saveTeacher">保存</button>
+                        <button class="btn secondary" @click="editTeacherObj=null" style="margin-left:8px;">取消</button>
+                    </div>
+                </div>
+
+                <!-- SQL 控制台 -->
+                <div v-if="adminTab === 'sql'">
+                    <div class="sql-console">
+                        <div class="sql-toolbar">
+                            <select v-model="sqlDatabase">
+                                <option value="">跨库查询（database.table）</option>
+                                <option v-for="db in dbList" :key="db.database" :value="db.database">{{ db.database }} ({{ db.tables.length }}表)</option>
+                            </select>
+                            <button class="btn" @click="executeSql" :disabled="!sqlQuery.trim() || sqlLoading">
+                                {{ sqlLoading ? '执行中...' : '▶ 执行' }}
+                            </button>
+                            <button class="btn secondary" @click="sqlQuery='';sqlResult=null;sqlError=''">清空</button>
+                            <span style="color:#a6adc8;font-size:12px;margin-left:auto;">Ctrl+Enter 快捷执行</span>
+                        </div>
+                        <textarea v-model="sqlQuery" placeholder="SELECT * FROM classroom_database.courses LIMIT 10;&#10;或选择数据库后直接: SELECT * FROM courses LIMIT 10;" @keydown.ctrl.enter="executeSql"></textarea>
+                        <div class="sql-info" v-if="sqlResult && sqlResult.success">
+                            ✅ 执行成功，{{ sqlResult.row_count }} 行结果
+                        </div>
+                        <div class="sql-error" v-if="sqlError">{{ sqlError }}</div>
+                        <div class="sql-result" v-if="sqlResult && sqlResult.success && sqlResult.columns">
+                            <div class="table-wrap">
+                                <table>
+                                    <thead><tr><th v-for="col in sqlResult.columns" :key="col">{{ col }}</th></tr></thead>
+                                    <tbody>
+                                        <tr v-for="(row, ri) in sqlResult.data.slice(0, 100)" :key="ri">
+                                            <td v-for="col in sqlResult.columns" :key="col">{{ row[col] != null ? row[col] : 'NULL' }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="sql-info" v-if="sqlResult.data.length > 100">... 仅显示前 100 行，共 {{ sqlResult.data.length }} 行</div>
+                        </div>
+                        <div class="sql-info" v-if="sqlResult && sqlResult.success && !sqlResult.columns">
+                            影响行数: {{ sqlResult.row_count }}
+                        </div>
+                    </div>
+                </div>
             </section>
         </template>
     </main>
@@ -508,6 +653,20 @@ createApp({
             gradeFilterStudent: '',
             gradeFilterCourse: '',
             gradeFilterScoreRange: '',
+            // 学生/教师管理
+            newStudent: { student_id: '', name: '', password: '', grade: '', major: '' },
+            editStudentObj: null,
+            editStudentPwd: '',
+            newTeacher: { teacher_id: '', name: '', password: '', college: '', title: '' },
+            editTeacherObj: null,
+            editTeacherPwd: '',
+            // SQL 控制台
+            sqlQuery: '',
+            sqlDatabase: '',
+            sqlResult: null,
+            sqlError: '',
+            sqlLoading: false,
+            dbList: [],
             // 透视筛选
             filterStudent: { id: '', grade: '', major: '' },
             filterTeacher: { id: '', college: '', title: '' },
@@ -700,6 +859,138 @@ createApp({
         },
         getScheduleItems(weekday, slotKey) {
             return this.studentSchedule.filter(s => s.weekday === weekday && `${s.start_time}-${s.end_time}` === slotKey);
+        },
+        // ── 学生管理 ──
+        async addStudent() {
+            if (!this.newStudent.student_id || !this.newStudent.name) return;
+            try {
+                const res = await this.api('/api/query/admin/students', 'POST', {
+                    student_id: this.newStudent.student_id,
+                    name: this.newStudent.name,
+                    password: this.newStudent.password || '123456',
+                    grade: this.newStudent.grade,
+                    major: this.newStudent.major,
+                });
+                if (res.success) {
+                    this.showToast(res.message);
+                    this.newStudent = { student_id: '', name: '', password: '', grade: '', major: '' };
+                    await this.loadAdminData();
+                } else {
+                    this.showToast(res.message || '添加失败');
+                }
+            } catch (e) { this.showToast('网络错误: ' + e.message); }
+        },
+        editStudent(s) {
+            this.editStudentObj = { ...s };
+            this.editStudentPwd = '';
+        },
+        async saveStudent() {
+            if (!this.editStudentObj) return;
+            const body = { name: this.editStudentObj.name, grade: this.editStudentObj.grade, major: this.editStudentObj.major };
+            if (this.editStudentPwd) body.password = this.editStudentPwd;
+            try {
+                const res = await this.api(`/api/query/admin/students/${this.editStudentObj.student_id}`, 'PUT', body);
+                if (res.success) {
+                    this.showToast(res.message);
+                    this.editStudentObj = null;
+                    this.editStudentPwd = '';
+                    await this.loadAdminData();
+                } else { this.showToast(res.message || '更新失败'); }
+            } catch (e) { this.showToast('网络错误: ' + e.message); }
+        },
+        async deleteStudent(sid) {
+            if (!confirm(`确定删除学生 ${sid}？此操作不可撤销。`)) return;
+            try {
+                const res = await this.api(`/api/query/admin/students/${sid}`, 'DELETE');
+                if (res.success) { this.showToast(res.message); await this.loadAdminData(); }
+                else { this.showToast(res.message || '删除失败'); }
+            } catch (e) { this.showToast('网络错误: ' + e.message); }
+        },
+        // ── 教师管理 ──
+        async addTeacher() {
+            if (!this.newTeacher.teacher_id || !this.newTeacher.name) return;
+            try {
+                const res = await this.api('/api/query/admin/teachers', 'POST', {
+                    teacher_id: this.newTeacher.teacher_id,
+                    name: this.newTeacher.name,
+                    password: this.newTeacher.password || '123456',
+                    college: this.newTeacher.college,
+                    title: this.newTeacher.title,
+                });
+                if (res.success) {
+                    this.showToast(res.message);
+                    this.newTeacher = { teacher_id: '', name: '', password: '', college: '', title: '' };
+                    await this.loadAdminData();
+                } else { this.showToast(res.message || '添加失败'); }
+            } catch (e) { this.showToast('网络错误: ' + e.message); }
+        },
+        editTeacher(t) {
+            this.editTeacherObj = { ...t };
+            this.editTeacherPwd = '';
+        },
+        async saveTeacher() {
+            if (!this.editTeacherObj) return;
+            const body = { name: this.editTeacherObj.name, college: this.editTeacherObj.college, title: this.editTeacherObj.title };
+            if (this.editTeacherPwd) body.password = this.editTeacherPwd;
+            try {
+                const res = await this.api(`/api/query/admin/teachers/${this.editTeacherObj.teacher_id}`, 'PUT', body);
+                if (res.success) {
+                    this.showToast(res.message);
+                    this.editTeacherObj = null;
+                    this.editTeacherPwd = '';
+                    await this.loadAdminData();
+                } else { this.showToast(res.message || '更新失败'); }
+            } catch (e) { this.showToast('网络错误: ' + e.message); }
+        },
+        async deleteTeacher(tid) {
+            if (!confirm(`确定删除教师 ${tid}？此操作不可撤销。`)) return;
+            try {
+                const res = await this.api(`/api/query/admin/teachers/${tid}`, 'DELETE');
+                if (res.success) { this.showToast(res.message); await this.loadAdminData(); }
+                else { this.showToast(res.message || '删除失败'); }
+            } catch (e) { this.showToast('网络错误: ' + e.message); }
+        },
+        // ── SQL 控制台 ──
+        async switchToSqlTab() {
+            this.adminTab = 'sql';
+            if (!this.dbList.length) await this.loadDatabases();
+        },
+        async loadDatabases() {
+            try {
+                const res = await this.api('/api/query/admin/databases');
+                if (res.success) this.dbList = res.data;
+            } catch (e) { /* ignore */ }
+        },
+        async executeSql() {
+            if (!this.sqlQuery.trim()) return;
+            this.sqlLoading = true;
+            this.sqlResult = null;
+            this.sqlError = '';
+            try {
+                const body = { sql: this.sqlQuery };
+                if (this.sqlDatabase) body.database = this.sqlDatabase;
+                const res = await this.api('/api/query/admin/sql', 'POST', body);
+                if (res.success) {
+                    const data = res.data;
+                    if (Array.isArray(data) && data.length > 0) {
+                        this.sqlResult = {
+                            success: true,
+                            columns: Object.keys(data[0]),
+                            data: data,
+                            row_count: res.row_count,
+                        };
+                    } else if (Array.isArray(data)) {
+                        this.sqlResult = { success: true, row_count: 0, columns: [], data: [] };
+                    } else {
+                        this.sqlResult = { success: true, row_count: res.row_count };
+                    }
+                } else {
+                    this.sqlError = res.message || '执行失败';
+                }
+            } catch (e) {
+                this.sqlError = '网络错误: ' + e.message;
+            }
+            this.sqlLoading = false;
         },
         scrollChat() {
             this.$nextTick(() => {
