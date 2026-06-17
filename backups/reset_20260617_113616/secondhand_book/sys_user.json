@@ -1,0 +1,68 @@
+[
+  {
+    "id": 1,
+    "username": "admin",
+    "password": "$2b$10$RkzWhFsK5fWFt2VHEQ8keOJs4xb9jrIm/cn3zVW46f7Ps0I3tsIvu",
+    "real_name": "管理员",
+    "phone": null,
+    "role": "admin",
+    "status": 1,
+    "create_time": "2026-04-25 23:35:17",
+    "update_time": "2026-04-26 00:08:24"
+  },
+  {
+    "id": 2,
+    "username": "zhangsan",
+    "password": "$2b$10$RkzWhFsK5fWFt2VHEQ8keOJs4xb9jrIm/cn3zVW46f7Ps0I3tsIvu",
+    "real_name": "张三",
+    "phone": "13800001001",
+    "role": "manager",
+    "status": 1,
+    "create_time": "2026-06-04 11:25:00",
+    "update_time": "2026-06-04 11:31:14"
+  },
+  {
+    "id": 3,
+    "username": "lisi",
+    "password": "$2b$10$RkzWhFsK5fWFt2VHEQ8keOJs4xb9jrIm/cn3zVW46f7Ps0I3tsIvu",
+    "real_name": "李四",
+    "phone": "13800001002",
+    "role": "staff",
+    "status": 1,
+    "create_time": "2026-06-04 11:25:00",
+    "update_time": "2026-06-04 11:31:14"
+  },
+  {
+    "id": 4,
+    "username": "wangwu",
+    "password": "$2b$10$RkzWhFsK5fWFt2VHEQ8keOJs4xb9jrIm/cn3zVW46f7Ps0I3tsIvu",
+    "real_name": "王五",
+    "phone": "13800001003",
+    "role": "staff",
+    "status": 1,
+    "create_time": "2026-06-04 11:25:00",
+    "update_time": "2026-06-04 11:31:14"
+  },
+  {
+    "id": 5,
+    "username": "zhaoliu",
+    "password": "$2b$10$RkzWhFsK5fWFt2VHEQ8keOJs4xb9jrIm/cn3zVW46f7Ps0I3tsIvu",
+    "real_name": "赵六",
+    "phone": "13800001004",
+    "role": "staff",
+    "status": 0,
+    "create_time": "2026-06-04 11:25:00",
+    "update_time": "2026-06-04 11:31:14"
+  },
+  {
+    "id": 6,
+    "username": "cangku",
+    "password": "$2b$10$RkzWhFsK5fWFt2VHEQ8keOJs4xb9jrIm/cn3zVW46f7Ps0I3tsIvu",
+    "real_name": "仓库管理员",
+    "phone": "13800001005",
+    "role": "warehouse",
+    "status": 1,
+    "create_time": "2026-06-04 11:42:39",
+    "update_time": "2026-06-04 11:42:39"
+  }
+]

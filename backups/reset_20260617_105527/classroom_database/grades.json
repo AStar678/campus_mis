@@ -1,0 +1,13 @@
+[
+  {
+    "id": 10,
+    "semester": "2025-2026 学年第二学期",
+    "course_id": 29,
+    "student_id": "20240001",
+    "source_type": "assignment",
+    "source_id": 25,
+    "score": 100.0,
+    "comment": "AI 初评自动录入，等待教师复核",
+    "updated_at": "2026-06-17 01:47:41"
+  }
+]

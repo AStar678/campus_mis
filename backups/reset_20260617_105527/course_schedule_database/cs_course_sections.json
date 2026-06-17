@@ -1,0 +1,50 @@
+[
+  {
+    "section_id": "AI001-02",
+    "course_id": "AI001",
+    "section_name": "人工智能导论 01班",
+    "teacher_id": "1001",
+    "capacity": 40,
+    "preferred_building": "",
+    "required_room_type": "普通教室",
+    "unavailable_slot_ids": "",
+    "status": "open",
+    "created_at": "2026-06-17 01:25:00"
+  },
+  {
+    "section_id": "CS001-01",
+    "course_id": "CS001",
+    "section_name": "C语言程序设计 01班",
+    "teacher_id": "1001",
+    "capacity": 40,
+    "preferred_building": "",
+    "required_room_type": "普通教室",
+    "unavailable_slot_ids": "",
+    "status": "open",
+    "created_at": "2026-06-17 01:19:04"
+  },
+  {
+    "section_id": "CS001-02",
+    "course_id": "CS001",
+    "section_name": "C语言程序设计 02班",
+    "teacher_id": "1002",
+    "capacity": 40,
+    "preferred_building": "",
+    "required_room_type": "普通教室",
+    "unavailable_slot_ids": "",
+    "status": "open",
+    "created_at": "2026-06-17 01:25:52"
+  },
+  {
+    "section_id": "CS002-01",
+    "course_id": "CS002",
+    "section_name": "Python程序设计 01班",
+    "teacher_id": "1001",
+    "capacity": 2,
+    "preferred_building": "",
+    "required_room_type": "普通教室",
+    "unavailable_slot_ids": "",
+    "status": "open",
+    "created_at": "2026-06-17 01:29:12"
+  }
+]

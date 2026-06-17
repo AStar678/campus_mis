@@ -1,0 +1,62 @@
+[
+  {
+    "id": 1,
+    "name": "计算机科学与技术",
+    "college_id": 1,
+    "create_time": "2026-06-04 11:37:46"
+  },
+  {
+    "id": 2,
+    "name": "软件工程",
+    "college_id": 1,
+    "create_time": "2026-06-04 11:37:46"
+  },
+  {
+    "id": 3,
+    "name": "人工智能",
+    "college_id": 1,
+    "create_time": "2026-06-04 11:37:46"
+  },
+  {
+    "id": 4,
+    "name": "通信工程",
+    "college_id": 2,
+    "create_time": "2026-06-04 11:37:46"
+  },
+  {
+    "id": 5,
+    "name": "电子信息工程",
+    "college_id": 2,
+    "create_time": "2026-06-04 11:37:46"
+  },
+  {
+    "id": 6,
+    "name": "数学与应用数学",
+    "college_id": 3,
+    "create_time": "2026-06-04 11:37:46"
+  },
+  {
+    "id": 7,
+    "name": "信息与计算科学",
+    "college_id": 3,
+    "create_time": "2026-06-04 11:37:46"
+  },
+  {
+    "id": 8,
+    "name": "工商管理",
+    "college_id": 4,
+    "create_time": "2026-06-04 11:37:46"
+  },
+  {
+    "id": 9,
+    "name": "经济学",
+    "college_id": 4,
+    "create_time": "2026-06-04 11:37:46"
+  },
+  {
+    "id": 10,
+    "name": "英语",
+    "college_id": 5,
+    "create_time": "2026-06-04 11:37:46"
+  }
+]

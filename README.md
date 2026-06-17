@@ -153,3 +153,18 @@ chmod +x deploy_simple.sh
 4. 启动所有服务（端口5001、5004、5005）
 
 详细部署说明请查看 [DEPLOYMENT.md](DEPLOYMENT.md)
+
+
+
+# 重置数据库
+# 1. 预览模式（安全，不修改数据）
+python3 reset_db.py --dry-run
+
+# 2. 仅导出备份，不清理
+python3 reset_db.py --backup-only
+
+# 3. 执行完整重置（备份 + 清理，需输入 YES 确认）
+python3 reset_db.py
+
+# 4. 从备份恢复
+python3 reset_db.py --restore backups/reset_20260617_120000
