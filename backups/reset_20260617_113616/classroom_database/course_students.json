@@ -1,0 +1,30 @@
+[
+  {
+    "id": 280,
+    "semester": "2025-2026 学年第二学期",
+    "course_id": 34,
+    "student_id": "20240001",
+    "final_grade": null
+  },
+  {
+    "id": 281,
+    "semester": "2025-2026 学年第二学期",
+    "course_id": 33,
+    "student_id": "20240002",
+    "final_grade": null
+  },
+  {
+    "id": 282,
+    "semester": "2025-2026 学年第二学期",
+    "course_id": 32,
+    "student_id": "20240002",
+    "final_grade": null
+  },
+  {
+    "id": 283,
+    "semester": "2025-2026 学年第二学期",
+    "course_id": 32,
+    "student_id": "20240003",
+    "final_grade": null
+  }
+]
