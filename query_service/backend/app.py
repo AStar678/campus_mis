@@ -7,6 +7,7 @@
 端口：5002
 """
 
+import hashlib
 import json
 import os
 import re
@@ -114,6 +115,7 @@ class Course(db.Model):
     teaching_method = db.Column(db.String(40), default="线下")
     target_grade = db.Column(db.String(16), default="")
     target_major = db.Column(db.String(64), default="")
+    semester = db.Column(db.String(20), default="2025-2026-2")
     created_at = db.Column(db.DateTime, default=datetime.now)
 
 
@@ -518,6 +520,7 @@ def admin_list_students(user):
     students = Student.query.all()
     result = [{
         "student_id": s.student_id,
+        "name": s.name or "",
         "grade": s.grade,
         "major": s.major,
     } for s in students]
@@ -531,9 +534,195 @@ def admin_list_teachers(user):
     teachers = Teacher.query.all()
     result = [{
         "teacher_id": t.teacher_id,
+        "name": t.name or "",
         "college": t.college,
         "title": t.title,
     } for t in teachers]
+    return jsonify({"success": True, "data": result})
+
+
+# ============ 管理员：学生/教师 CRUD ============
+
+@app.route("/api/query/admin/students", methods=["POST"])
+@require_auth("admin")
+def admin_create_student(user):
+    """管理员添加学生"""
+    data = request.get_json() or {}
+    student_id = (data.get("student_id") or "").strip()
+    name = (data.get("name") or "").strip()
+    password = (data.get("password") or "123456").strip()
+    grade = (data.get("grade") or "").strip()
+    major = (data.get("major") or "").strip()
+
+    if not student_id or len(student_id) != 8:
+        return jsonify({"success": False, "message": "学号必须为8位"}), 400
+    if not name:
+        return jsonify({"success": False, "message": "姓名不能为空"}), 400
+    if db.session.get(Student, student_id):
+        return jsonify({"success": False, "message": f"学生 {student_id} 已存在"}), 409
+
+    hashed = hashlib.sha256(password.encode()).hexdigest()
+    student = Student(student_id=student_id, password=hashed, name=name, grade=grade, major=major)
+    db.session.add(student)
+    db.session.commit()
+    return jsonify({"success": True, "message": f"学生 {student_id} ({name}) 添加成功"}), 201
+
+
+@app.route("/api/query/admin/students/<student_id>", methods=["PUT"])
+@require_auth("admin")
+def admin_update_student(user, student_id):
+    """管理员修改学生信息"""
+    student = db.session.get(Student, student_id)
+    if not student:
+        return jsonify({"success": False, "message": "学生不存在"}), 404
+    data = request.get_json() or {}
+    if data.get("name"):
+        student.name = data["name"].strip()
+    if data.get("password"):
+        student.password = hashlib.sha256(data["password"].strip().encode()).hexdigest()
+    if data.get("grade") is not None:
+        student.grade = data["grade"].strip()
+    if data.get("major") is not None:
+        student.major = data["major"].strip()
+    db.session.commit()
+    return jsonify({"success": True, "message": f"学生 {student_id} 信息已更新"})
+
+
+@app.route("/api/query/admin/students/<student_id>", methods=["DELETE"])
+@require_auth("admin")
+def admin_delete_student(user, student_id):
+    """管理员删除学生"""
+    student = db.session.get(Student, student_id)
+    if not student:
+        return jsonify({"success": False, "message": "学生不存在"}), 404
+    db.session.delete(student)
+    db.session.commit()
+    return jsonify({"success": True, "message": f"学生 {student_id} 已删除"})
+
+
+@app.route("/api/query/admin/teachers", methods=["POST"])
+@require_auth("admin")
+def admin_create_teacher(user):
+    """管理员添加教师"""
+    data = request.get_json() or {}
+    teacher_id = (data.get("teacher_id") or "").strip()
+    name = (data.get("name") or "").strip()
+    password = (data.get("password") or "123456").strip()
+    college = (data.get("college") or "").strip()
+    title = (data.get("title") or "").strip()
+
+    if not teacher_id or len(teacher_id) != 4:
+        return jsonify({"success": False, "message": "工号必须为4位"}), 400
+    if not name:
+        return jsonify({"success": False, "message": "姓名不能为空"}), 400
+    if db.session.get(Teacher, teacher_id):
+        return jsonify({"success": False, "message": f"教师 {teacher_id} 已存在"}), 409
+
+    hashed = hashlib.sha256(password.encode()).hexdigest()
+    teacher = Teacher(teacher_id=teacher_id, password=hashed, name=name, college=college, title=title)
+    db.session.add(teacher)
+    db.session.commit()
+    return jsonify({"success": True, "message": f"教师 {teacher_id} ({name}) 添加成功"}), 201
+
+
+@app.route("/api/query/admin/teachers/<teacher_id>", methods=["PUT"])
+@require_auth("admin")
+def admin_update_teacher(user, teacher_id):
+    """管理员修改教师信息"""
+    teacher = db.session.get(Teacher, teacher_id)
+    if not teacher:
+        return jsonify({"success": False, "message": "教师不存在"}), 404
+    data = request.get_json() or {}
+    if data.get("name"):
+        teacher.name = data["name"].strip()
+    if data.get("password"):
+        teacher.password = hashlib.sha256(data["password"].strip().encode()).hexdigest()
+    if data.get("college") is not None:
+        teacher.college = data["college"].strip()
+    if data.get("title") is not None:
+        teacher.title = data["title"].strip()
+    db.session.commit()
+    return jsonify({"success": True, "message": f"教师 {teacher_id} 信息已更新"})
+
+
+@app.route("/api/query/admin/teachers/<teacher_id>", methods=["DELETE"])
+@require_auth("admin")
+def admin_delete_teacher(user, teacher_id):
+    """管理员删除教师"""
+    teacher = db.session.get(Teacher, teacher_id)
+    if not teacher:
+        return jsonify({"success": False, "message": "教师不存在"}), 404
+    db.session.delete(teacher)
+    db.session.commit()
+    return jsonify({"success": True, "message": f"教师 {teacher_id} 已删除"})
+
+
+# ============ 管理员：SQL 直连控制台 ============
+
+@app.route("/api/query/admin/sql", methods=["POST"])
+@require_auth("admin")
+def admin_sql_console(user):
+    """
+    SQL 直连控制台 —— 管理员可直接执行 SQL 访问所有云端数据库。
+
+    请求体：
+        {"sql": "SELECT ...", "database": "classroom_database"}
+
+    database 字段可选：
+        - 不填：SQL 需使用 database.table 完整限定名，可跨库查询
+        - 填写：连接指定数据库，可使用简写表名
+
+    安全限制：
+        - 禁止 DROP / TRUNCATE / ALTER / CREATE DATABASE / CREATE TABLE
+        - 修改操作仅允许 users_database 和 main_database
+        - 所有修改操作记录审计日志
+    """
+    data = request.get_json() or {}
+    sql = (data.get("sql") or "").strip()
+    target_db = (data.get("database") or "").strip() or None
+
+    if not sql:
+        return jsonify({"success": False, "message": "请输入 SQL 语句"}), 400
+
+    result, error = execute_safe_sql(sql, user["user_type"], target_db)
+    if error:
+        return jsonify({"success": False, "message": error}), 400
+
+    if isinstance(result, list):
+        data, row_count = result, len(result)
+    elif isinstance(result, tuple):
+        data, row_count = list(result), len(result)
+    else:
+        data = {"affected_rows": result.get("affected_rows", 0)} if isinstance(result, dict) else str(result)
+        row_count = result.get("affected_rows", 0) if isinstance(result, dict) else 0
+
+    return jsonify({
+        "success": True,
+        "data": data,
+        "row_count": row_count,
+    })
+
+
+@app.route("/api/query/admin/databases", methods=["GET"])
+@require_auth("admin")
+def admin_list_databases(_user):
+    """列出所有可访问的数据库及表信息"""
+    import pymysql
+    databases = ["classroom_database", "users_database", "course_schedule_database", "main_database"]
+    result = []
+    for db_name in databases:
+        try:
+            conn = pymysql.connect(
+                host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASS_RAW,
+                database=db_name, charset="utf8mb4"
+            )
+            cur = conn.cursor()
+            cur.execute("SHOW TABLES")
+            tables = [r[0] for r in cur.fetchall()]
+            conn.close()
+            result.append({"database": db_name, "tables": tables})
+        except Exception as e:
+            result.append({"database": db_name, "error": str(e)})
     return jsonify({"success": True, "data": result})
 
 
@@ -626,6 +815,7 @@ def get_db_schema_description(user_type):
   说明：教师在课堂教学平台实际创建并授课的课程（课程编号以 CLS 开头）
   字段：
     - id          INT 主键 自增
+    - semester    VARCHAR(20)  学期标识，格式如 "2025-2026-2"（学年-学期），用于区分不同学期数据
     - code        VARCHAR(32)  课程编号，格式如 CLS001、CLS002
     - name        VARCHAR(100) 课程名称，如"长时序列预测 (LTSF) 进阶模型"、"移动应用开发"
     - description VARCHAR(500) 课程描述
@@ -640,13 +830,14 @@ def get_db_schema_description(user_type):
     - target_major VARCHAR(64)  目标专业，如"计算机科学与技术"
     - created_at  DATETIME     创建时间
   示例数据：
-    (1, 'CLS001', '长时序列预测 (LTSF) 进阶模型', '1001', '周一 1-2 节 08:00-09:40', 'A101', 2.0)
-    (7, 'CLS007', '移动应用开发', '1001', '周三 3-4 节 10:00-11:40', 'A201', 2.0)
+    (1, '2025-2026-2', 'CLS001', '长时序列预测 (LTSF) 进阶模型', '1001', '周一 1-2 节 08:00-09:40', 'A101', 2.0)
+    (7, '2025-2026-2', 'CLS007', '移动应用开发', '1001', '周三 3-4 节 10:00-11:40', 'A201', 2.0)
 
 表 1.2: classroom_database.course_students
   说明：课堂选课学生表，记录哪些学生选了哪门课，以及最终成绩
   字段：
     - id          INT 主键
+    - semester    VARCHAR(20)  学期标识，与 courses.semester 对应
     - course_id   INT 外键 → courses.id
     - student_id  VARCHAR(8)  学号，如 '20240001'
     - final_grade FLOAT       最终成绩（0-100），可能为 NULL（尚未打分）
@@ -752,10 +943,17 @@ def build_agent_system_prompt(user_type, user_id):
         permission_desc = f"""
 你是一个校园教务管理助手，当前用户是管理员，账号为 {user_id}。
 权限：
-- 可以查询所有信息，不受限制
-- 可以执行 INSERT、UPDATE 操作来修改数据
-- 但禁止执行 DROP、TRUNCATE、ALTER 等危险的结构修改操作
+- 可以查询所有数据库的所有信息，不受限制
+- 可以使用 database.table 语法跨库查询（如 classroom_database.courses）
+- 可以执行 INSERT、UPDATE、DELETE 操作修改数据
+- 修改操作仅限 users_database（学生/教师账号管理）和 main_database（历史成绩/选课记录）
+- 禁止执行 DROP、TRUNCATE、ALTER 等危险的结构修改操作
 - 修改操作需要谨慎，确保数据完整性
+
+用户管理能力：
+- 可以添加学生：INSERT INTO users_database.students (student_id, password, name, grade, major) VALUES (...)
+- 可以添加教师：INSERT INTO users_database.teachers (teacher_id, password, name, college, title) VALUES (...)
+- 密码使用 SHA-256 哈希存储，需要生成哈希值
 """
 
     return f"""{permission_desc}
@@ -831,8 +1029,16 @@ WHERE cs.final_grade < 60 AND cs.final_grade IS NOT NULL
 """
 
 
-def execute_safe_sql(sql, user_type):
-    """安全执行 SQL 语句（加强版）"""
+def execute_safe_sql(sql, user_type, target_db=None):
+    """安全执行 SQL 语句（跨库版）。
+    
+    Args:
+        sql: SQL 语句（支持 database.table 跨库引用）
+        user_type: 用户角色（student/teacher/admin）
+        target_db: 指定默认数据库（可选），便于 SHOW TABLES 等操作
+    """
+    import pymysql
+    
     sql_upper = sql.strip().upper()
 
     # 1. 危险操作过滤
@@ -842,58 +1048,60 @@ def execute_safe_sql(sql, user_type):
             return None, f"禁止执行危险操作: {kw}"
 
     # 2. 非管理员禁止修改
-    modify_keywords = ["INSERT", "UPDATE", "DELETE"]
+    modify_keywords = ["INSERT", "UPDATE", "DELETE", "REPLACE"]
     if user_type != "admin":
         for kw in modify_keywords:
             if sql_upper.startswith(kw):
                 return None, "当前角色无权执行修改操作"
 
-    # 3. 禁止跨库修改（仅对 INSERT/UPDATE/DELETE 生效，SELECT 不受限）
-    if any(kw in sql_upper for kw in modify_keywords):
-        forbidden_databases = [
-            'classroom_database', 'course_schedule_database',
-            'users_database', 'campus_wall_database'
-        ]
-        for db_name in forbidden_databases:
-            if db_name in sql:
-                return None, f"禁止修改 {db_name} 的数据"
+    # 3. 管理员跨库修改：仅允许 users_database（管理学生/教师账号）和 main_database
+    if user_type == "admin" and any(kw in sql_upper for kw in modify_keywords):
+        # 提取 SQL 中引用的数据库名
+        db_pattern = re.findall(r'(?:FROM|INTO|UPDATE|JOIN)\s+(\w+)\.', sql, re.IGNORECASE)
+        # 也检查直接的 database.table 引用
+        all_db_refs = set()
+        for match in re.finditer(r'(\w+_database)\.', sql, re.IGNORECASE):
+            all_db_refs.add(match.group(1))
+        # 如果没有明确库名，则使用 target_db
+        if not all_db_refs and target_db:
+            all_db_refs = {target_db}
+        # main_database 始终允许
+        allowed = {'main_database', 'users_database'}
+        for db_name in all_db_refs:
+            if db_name not in allowed:
+                return None, f"禁止修改 {db_name} 的数据。管理员仅可修改 users_database 和 main_database"
 
-    # 4. 🔴 新增：限制可修改的表（白名单）
-    if any(kw in sql_upper for kw in modify_keywords):
-        allowed_tables = ['course_grades', 'course_enrollments']
-        table_found = False
-        for table in allowed_tables:
-            if table.upper() in sql_upper:
-                table_found = True
-                break
-        if not table_found:
-            return None, f"只能修改以下表: {', '.join(allowed_tables)}"
-
-    # 5. 🔴 新增：记录审计日志
+    # 4. 记录审计日志
     if any(kw in sql_upper for kw in modify_keywords):
         log_audit_operation(user_type, sql)
 
-    # 6. 执行 SQL（强制限定 main_database）
+    # 5. 执行 SQL（不强制限定数据库，支持跨库查询）
     try:
-        import pymysql
-        conn = pymysql.connect(
-            host=DB_HOST,
-            port=DB_PORT,
-            user=DB_USER,
-            password=DB_PASS_RAW,
-            charset="utf8mb4",
-            database="main_database"  # 🔴 强制限定数据库
-        )
+        connect_kwargs = {
+            "host": DB_HOST,
+            "port": DB_PORT,
+            "user": DB_USER,
+            "password": DB_PASS_RAW,
+            "charset": "utf8mb4",
+        }
+        if target_db:
+            connect_kwargs["database"] = target_db
+
+        conn = pymysql.connect(**connect_kwargs)
         cursor = conn.cursor(pymysql.cursors.DictCursor)
         cursor.execute(sql)
 
-        if sql_upper.startswith("SELECT") or sql_upper.startswith("SHOW"):
+        if sql_upper.startswith("SELECT") or sql_upper.startswith("SHOW") or sql_upper.startswith("DESC"):
             rows = cursor.fetchall()
-            # 将 datetime 对象转为字符串
+            # pymysql fetchall() 可能返回空 tuple，统一转为 list
+            if isinstance(rows, tuple):
+                rows = list(rows)
             for row in rows:
                 for key, val in row.items():
                     if isinstance(val, datetime):
                         row[key] = val.isoformat()
+                    elif isinstance(val, bytes):
+                        row[key] = val.decode("utf-8", errors="replace")
             conn.close()
             return rows, None
         else:
@@ -949,10 +1157,75 @@ def extract_sql_from_response(response_text):
     return []
 
 
+def format_query_results(query_results):
+    """用代码格式化查询结果为 Markdown，杜绝 LLM 编造数据。
+    
+    这是反幻觉的核心措施：不再让 LLM 二次总结 SQL 执行结果，
+    而是由 Python 代码直接构建 Markdown 表格，确保数据 100% 忠实。
+    """
+    if not query_results:
+        return "查询未返回任何结果。"
+
+    parts = []
+    for i, qr in enumerate(query_results):
+        label = f"查询 {i + 1}" if len(query_results) > 1 else "查询结果"
+
+        if qr.get("error"):
+            parts.append(
+                f"### ❌ {label}\n"
+                f"```sql\n{qr['sql']}\n```\n"
+                f"> 错误：{qr['error']}\n"
+            )
+            continue
+
+        data = qr.get("data", [])
+
+        # 非 SELECT 操作（UPDATE/INSERT/DELETE）
+        if isinstance(data, dict):
+            affected = data.get("affected_rows", 0)
+            parts.append(
+                f"### ✅ {label}\n"
+                f"```sql\n{qr['sql']}\n```\n"
+                f"> 操作成功，影响 {affected} 行。\n"
+            )
+            continue
+
+        if not isinstance(data, list) or not data:
+            parts.append(
+                f"### 📭 {label}\n"
+                f"```sql\n{qr['sql']}\n```\n"
+                f"> 查询成功，但未返回任何数据。\n"
+            )
+            continue
+
+        # SELECT 结果 → 构建 Markdown 表格
+        headers = list(data[0].keys())
+        table_lines = ["| " + " | ".join(headers) + " |"]
+        table_lines.append("| " + " | ".join([":---"] * len(headers)) + " |")
+        for row in data:
+            vals = [str(row.get(h, "")) for h in headers]
+            table_lines.append("| " + " | ".join(vals) + " |")
+
+        parts.append(
+            f"### 📊 {label}\n"
+            f"```sql\n{qr['sql']}\n```\n"
+            + "\n".join(table_lines) +
+            f"\n\n> 共 {len(data)} 条记录\n"
+        )
+
+    return "\n---\n".join(parts)
+
+
 @app.route("/api/query/agent", methods=["POST"])
 @require_auth("student", "teacher", "admin")
 def agent_query(user):
-    """Agent 智能查询接口"""
+    """Agent 智能查询接口。
+    
+    工作流程：
+    1. DeepSeek 将自然语言问题转换为 SQL
+    2. 代码安全执行 SQL 并获取真实数据
+    3. 代码格式化结果为 Markdown（杜绝 LLM 编造）
+    """
     data = request.get_json() or {}
     question = data.get("question", "").strip()
     if not question:
@@ -967,7 +1240,7 @@ def agent_query(user):
         {"role": "user", "content": question},
     ]
 
-    # 第一轮调用: 生成 SQL
+    # 调用 DeepSeek 生成 SQL
     ai_response, error = call_deepseek_api(messages)
     if error:
         return jsonify({"success": False, "message": error}), 500
@@ -984,22 +1257,13 @@ def agent_query(user):
             else:
                 query_results.append({"sql": sql, "data": result})
 
-        # 第二轮调用: 让 AI 解读结果
-        result_text = json.dumps(query_results, ensure_ascii=False, default=str)
-        messages.append({"role": "assistant", "content": ai_response})
-        messages.append({
-            "role": "user",
-            "content": f"以下是SQL执行结果，请用简明中文总结回答用户的问题:\n{result_text}",
-        })
-
-        summary, error2 = call_deepseek_api(messages)
-        if error2:
-            summary = ai_response  # 如果第二轮失败，直接使用第一轮结果
-
+        # 🆕 用代码格式化结果，不再依赖 LLM 二次总结
+        formatted = format_query_results(query_results)
         return jsonify({
             "success": True,
             "data": {
-                "answer": summary,
+                "answer": formatted,
+                "ai_reasoning": ai_response,
                 "sql_executed": sql_statements,
                 "raw_results": query_results,
             },

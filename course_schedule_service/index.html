@@ -250,7 +250,7 @@
                 <div class="section-head">
                     <div>
                         <h2>本轮选课</h2>
-                        <p class="muted">必修课由培养方案保障；学生主要提交专业选修课和公共课的选课意向，管理员统一排课并发布结果。</p>
+                        <p class="muted">学生提交专业选修课和公共课的选课意向，管理员统一排课并发布结果。</p>
                     </div>
                     <button class="btn secondary" @click="loadStudentData">刷新</button>
                 </div>
@@ -320,24 +320,6 @@
 
             <section class="panel">
                 <div class="section-head">
-                    <h2>计划内必修课</h2>
-                    <span class="muted">共 {{ requiredPlanCourses.length }} 门</span>
-                </div>
-                <div class="summary-list" v-if="requiredPlanCourses.length">
-                    <div class="summary-item" v-for="course in requiredPlanCourses" :key="course.course_id">
-                        <div>
-                            <strong>{{ course.course_name }}</strong>
-                            <div class="muted">{{ courseCode(course) }} · {{ course.hours_per_week }} 学时/周</div>
-                        </div>
-                        <span class="pill">培养方案保障</span>
-                        <span class="pill">{{ course.preferred_building || '楼栋待定' }}</span>
-                    </div>
-                </div>
-                <div class="empty" v-else>暂无计划内必修课。</div>
-            </section>
-
-            <section class="panel">
-                <div class="section-head">
                     <h2>可提交意向的教学班</h2>
                     <span class="muted">共 {{ filteredSelectableCourses.length }} 门课程 / {{ filteredSelectableSectionCount }} 个教学班</span>
                 </div>
@@ -394,7 +376,7 @@
                             <div class="muted">学分要求：{{ course.credits }} 学分，提交后计入本轮选课意向学分。</div>
                             <div class="muted">建议：{{ courseAdvice(course) }}</div>
                         </div>
-                        <div class="field" v-if="!isRequiredCourse(course)">
+                        <div class="field">
                             <label>选择教学班</label>
                             <select v-model="sectionDrafts[course.course_id]" :disabled="isScheduled(course.course_id)">
                                 <option value="">请选择教师/教学班</option>
@@ -406,7 +388,7 @@
                         <div class="notice" v-if="selectedSection(course.course_id)">
                             <div class="muted">已选教学班：{{ selectedSection(course.course_id).section_name }} · 教师 {{ selectedSection(course.course_id).teacher_id || '待分配' }} · 容量 {{ selectedSection(course.course_id).capacity }} · 偏好楼栋 {{ selectedSection(course.course_id).preferred_building || '未设置' }}</div>
                         </div>
-                        <div class="field" v-if="!isRequiredCourse(course)">
+                        <div class="field">
                             <label>意向优先级</label>
                             <select v-model="preferenceDrafts[course.course_id]" :disabled="isScheduled(course.course_id)">
                                 <option value="1">第一意向</option>
@@ -414,12 +396,9 @@
                                 <option value="3">第三意向</option>
                             </select>
                         </div>
-                        <div class="notice" v-else>
-                            <div class="muted">必修课属于培养方案保障课程，不参与学生意向排序。</div>
-                        </div>
                         <div class="actions">
-                            <button class="btn success" :disabled="!isSelectionOpen || isScheduled(course.course_id) || isRequiredCourse(course) || !courseEligibility(course).ok" @click="submitRequest(course)">
-                                {{ !isSelectionOpen ? '批次不可提交' : isRequiredCourse(course) ? '计划内保障' : !courseEligibility(course).ok ? courseEligibility(course).label : hasRequested(course.course_id) ? '更新意向' : '提交意向' }}
+                            <button class="btn success" :disabled="!isSelectionOpen || isScheduled(course.course_id) || !courseEligibility(course).ok" @click="submitRequest(course)">
+                                {{ !isSelectionOpen ? '批次不可提交' : !courseEligibility(course).ok ? courseEligibility(course).label : hasRequested(course.course_id) ? '更新意向' : '提交意向' }}
                             </button>
                             <span class="pill warn" v-if="hasRequested(course.course_id)">已申请</span>
                             <span class="pill ok" v-if="isScheduled(course.course_id)">已排课</span>
@@ -616,6 +595,7 @@
                         <button class="btn" :disabled="!results.length || scheduleRunning || !localSettings.canPublish" @click="publishResults">发布结果</button>
                         <button class="btn secondary" @click="exportRequestsCsv">导出意向</button>
                         <button class="btn secondary" :disabled="!results.length" @click="exportResultsCsv">导出排课</button>
+                        <button class="btn danger" :disabled="syncRunning || !results.length" @click="syncToClassroom">{{ syncRunning ? '同步中...' : '同步到课堂' }}</button>
                     </div>
                 </div>
                 <div class="stats">
@@ -689,11 +669,23 @@
                             <small>仅用于数据库关联；页面和导出表会自动显示 REQ/ELE/PUB 统一教务编号。</small>
                         </div>
                         <div class="field"><label>课程名称</label><input v-model.trim="courseForm.course_name" placeholder="数据库系统"></div>
-                        <div class="field"><label>授课教师</label><input v-model.trim="courseForm.teacher_id" placeholder="1001"></div>
+                        <div class="field">
+                            <label>授课教师</label>
+                            <select v-model="courseForm.teacher_id">
+                                <option value="">请选择教师</option>
+                                <option v-for="t in teachers" :key="t.teacher_id" :value="t.teacher_id">{{ t.name }} · {{ t.teacher_id }} · {{ t.college }}</option>
+                            </select>
+                        </div>
                         <div class="field"><label>容量</label><input v-model="courseForm.capacity" placeholder="40"></div>
                         <div class="field"><label>学分</label><input v-model="courseForm.credits" placeholder="2"></div>
                         <div class="field"><label>每周学时</label><input v-model="courseForm.hours_per_week" placeholder="2"></div>
-                        <div class="field"><label>偏好楼栋</label><input v-model.trim="courseForm.preferred_building" placeholder="1号楼"></div>
+                        <div class="field">
+                            <label>偏好楼栋</label>
+                            <select v-model="courseForm.preferred_building">
+                                <option value="">请选择楼栋</option>
+                                <option v-for="b in buildings" :key="b.id" :value="b.name">{{ b.name }}</option>
+                            </select>
+                        </div>
                         <div class="field"><label>适用专业</label><input v-model.trim="courseForm.allowed_majors" placeholder="all 或 软件工程,人工智能"></div>
                         <div class="field"><label>适用年级</label><input v-model.trim="courseForm.allowed_grades" placeholder="all 或 2024,2025"></div>
                         <div class="field"><label>先修说明</label><input v-model.trim="courseForm.prerequisite_note" placeholder="无"></div>
@@ -730,7 +722,10 @@
                                     </td>
                                     <td>
                                         <template v-if="editingCourseId === course.course_id">
-                                            <input v-model.trim="courseDraft.teacher_id" placeholder="默认教学班教师工号">
+                                            <select v-model="courseDraft.teacher_id">
+                                                <option value="">请选择教师</option>
+                                                <option v-for="t in teachers" :key="t.teacher_id" :value="t.teacher_id">{{ t.name }} · {{ t.teacher_id }}</option>
+                                            </select>
                                             <div class="muted">单教学班课程会同步该教师；多教学班以明细为准。</div>
                                         </template>
                                         <template v-else>{{ course.open_section_count || openSections(course).length }} / {{ course.section_count || (course.sections || []).length }} 个开放</template>
@@ -745,7 +740,10 @@
                                     </td>
                                     <td>{{ course.active_request_count }} / {{ course.capacity }}</td>
                                     <td>
-                                        <input v-if="editingCourseId === course.course_id" v-model.trim="courseDraft.preferred_building" placeholder="偏好楼栋">
+                                        <select v-if="editingCourseId === course.course_id" v-model="courseDraft.preferred_building">
+                                            <option value="">请选择楼栋</option>
+                                            <option v-for="b in buildings" :key="b.id" :value="b.name">{{ b.name }}</option>
+                                        </select>
                                         <template v-else>{{ adminSectionSummary(course) }}</template>
                                     </td>
                                     <td><span class="pill" :class="course.status === 'open' ? 'ok' : 'danger'">{{ course.status_label }}</span></td>
@@ -779,15 +777,31 @@
                     <form class="grid-3" @submit.prevent="createSection">
                         <div class="field">
                             <label>所属课程</label>
-                            <select v-model="sectionForm.course_id">
+                            <select v-model="sectionForm.course_id" @change="onSectionCourseChange">
                                 <option value="">请选择课程</option>
                                 <option v-for="course in courses" :key="course.course_id" :value="course.course_id">{{ courseCode(course) }} · {{ course.course_name }}</option>
                             </select>
                         </div>
-                        <div class="field"><label>教学班名称</label><input v-model.trim="sectionForm.section_name" placeholder="数据库系统 02班"></div>
-                        <div class="field"><label>授课教师</label><input v-model.trim="sectionForm.teacher_id" placeholder="1010"></div>
+                        <div class="field">
+                            <label>教学班名称</label>
+                            <input :value="sectionAutoName" disabled placeholder="自动生成">
+                            <small>名称根据「课程名 + 序号」自动生成，无需手动输入。</small>
+                        </div>
+                        <div class="field">
+                            <label>授课教师</label>
+                            <select v-model="sectionForm.teacher_id">
+                                <option value="">自动识别（课程的授课教师）</option>
+                                <option v-for="t in teachers" :key="t.teacher_id" :value="t.teacher_id">{{ t.name }} · {{ t.teacher_id }} · {{ t.college }}</option>
+                            </select>
+                        </div>
                         <div class="field"><label>容量</label><input v-model="sectionForm.capacity" placeholder="40"></div>
-                        <div class="field"><label>上课楼栋偏好</label><input v-model.trim="sectionForm.preferred_building" placeholder="2号楼"></div>
+                        <div class="field">
+                            <label>上课楼栋偏好</label>
+                            <select v-model="sectionForm.preferred_building">
+                                <option value="">自动识别（课程的偏好楼栋）</option>
+                                <option v-for="b in buildings" :key="b.id" :value="b.name">{{ b.name }}</option>
+                            </select>
+                        </div>
                         <div class="field">
                             <label>教室类型要求</label>
                             <select v-model="sectionForm.required_room_type">
@@ -827,7 +841,10 @@
                                         <template v-else>{{ section.section_name }}<br><span class="muted">{{ section.section_id }}</span></template>
                                     </td>
                                     <td>
-                                        <input v-if="editingSectionId === section.section_id" v-model.trim="sectionDraft.teacher_id" placeholder="教师工号">
+                                        <select v-if="editingSectionId === section.section_id" v-model="sectionDraft.teacher_id">
+                                            <option value="">请选择教师</option>
+                                            <option v-for="t in teachers" :key="t.teacher_id" :value="t.teacher_id">{{ t.name }} · {{ t.teacher_id }}</option>
+                                        </select>
                                         <template v-else>{{ section.teacher_id || '待分配' }}</template>
                                     </td>
                                     <td>
@@ -836,7 +853,10 @@
                                     </td>
                                     <td>{{ section.active_request_count }} / {{ section.capacity }}</td>
                                     <td>
-                                        <input v-if="editingSectionId === section.section_id" v-model.trim="sectionDraft.preferred_building" placeholder="楼栋">
+                                        <select v-if="editingSectionId === section.section_id" v-model="sectionDraft.preferred_building">
+                                            <option value="">请选择楼栋</option>
+                                            <option v-for="b in buildings" :key="b.id" :value="b.name">{{ b.name }}</option>
+                                        </select>
                                         <template v-else>{{ section.preferred_building || '未设置' }} · {{ section.required_room_type || '普通教室' }}</template>
                                     </td>
                                     <td>
@@ -1172,6 +1192,7 @@ createApp({
         return {
             loading: true,
             scheduleRunning: false,
+            syncRunning: false,
             toast: '',
             errorMsg: '',
             token: new URLSearchParams(window.location.search).get('token') || localStorage.getItem('course_schedule_token') || '',
@@ -1184,6 +1205,8 @@ createApp({
             results: [],
             timeSlots: [],
             classrooms: [],
+            teachers: [],
+            buildings: [],
             teacherSections: [],
             teacherRequests: [],
             preferenceDrafts: {},
@@ -1227,11 +1250,8 @@ createApp({
         openCourses() {
             return this.courses.filter(course => course.status === 'open');
         },
-        requiredPlanCourses() {
-            return this.openCourses.filter(course => this.isRequiredCourse(course));
-        },
         selectableCourses() {
-            return this.openCourses.filter(course => !this.isRequiredCourse(course) && this.openSections(course).length > 0);
+            return this.openCourses.filter(course => this.openSections(course).length > 0);
         },
         selectableSectionCount() {
             return this.selectableCourses.reduce((total, course) => total + this.openSections(course).length, 0);
@@ -1247,7 +1267,7 @@ createApp({
             return Number.isInteger(total) ? total : total.toFixed(1);
         },
         creditBreakdown() {
-            const result = { required: 0, elective: 0, public: 0 };
+            const result = { elective: 0, public: 0 };
             this.activeRequests.forEach(item => {
                 const course = this.courseById(item.course_id);
                 const type = this.courseType(course).key;
@@ -1403,7 +1423,6 @@ createApp({
                 if (this.courseFilter === 'available') return course.remaining_capacity > 0;
                 if (this.courseFilter === 'hot') return this.capacityPercent(course) >= 80;
                 if (this.courseFilter === 'requested') return this.hasRequested(course.course_id);
-                if (this.courseFilter === 'required') return this.courseType(course).key === 'required';
                 if (this.courseFilter === 'elective') return this.courseType(course).key === 'elective';
                 if (this.courseFilter === 'public') return this.courseType(course).key === 'public';
                 return true;
@@ -1416,7 +1435,7 @@ createApp({
             return list;
         },
         filteredSelectableCourses() {
-            return this.filteredOpenCourses.filter(course => !this.isRequiredCourse(course) && this.openSections(course).length > 0);
+            return this.filteredOpenCourses.filter(course => this.openSections(course).length > 0);
         },
         filteredSelectableSectionCount() {
             return this.filteredSelectableCourses.reduce((total, course) => total + this.openSections(course).length, 0);
@@ -1542,6 +1561,14 @@ createApp({
                     advice,
                 };
             }).sort((a, b) => b.active_count - a.active_count);
+        },
+        sectionAutoName() {
+            if (!this.sectionForm.course_id) return '';
+            const course = this.courseById(this.sectionForm.course_id);
+            if (!course || !course.course_name) return '';
+            const count = (course.sections || []).length + 1;
+            const padded = String(count).padStart(2, '0');
+            return `${course.course_name} ${padded}班`;
         }
     },
     async mounted() {
@@ -1610,13 +1637,15 @@ createApp({
         },
         async loadAdminData() {
             try {
-                const [settings, courses, requests, results, timeSlots, classrooms] = await Promise.all([
+                const [settings, courses, requests, results, timeSlots, classrooms, teachers, buildings] = await Promise.all([
                     this.api('/api/course-schedule/settings'),
                     this.api('/api/course-schedule/courses'),
                     this.api('/api/course-schedule/requests'),
                     this.api('/api/course-schedule/results'),
                     this.api('/api/course-schedule/time-slots'),
-                    this.api('/api/course-schedule/classrooms')
+                    this.api('/api/course-schedule/classrooms'),
+                    this.api('/api/course-schedule/teachers'),
+                    this.api('/api/course-schedule/buildings')
                 ]);
                 this.localSettings = { ...DEFAULT_SETTINGS, ...settings };
                 this.settingsDraft = { ...this.localSettings };
@@ -1625,6 +1654,8 @@ createApp({
                 this.results = results;
                 this.timeSlots = timeSlots;
                 this.classrooms = classrooms;
+                this.teachers = teachers;
+                this.buildings = buildings;
                 this.initPreferenceDrafts();
             } catch (err) {
                 this.showToast(err.message);
@@ -1651,6 +1682,14 @@ createApp({
         },
         hasRequested(courseId) {
             return this.requests.some(item => item.course_id === courseId && item.status !== 'cancelled');
+        },
+        onSectionCourseChange() {
+            if (!this.sectionForm.course_id) return;
+            const course = this.courseById(this.sectionForm.course_id);
+            if (course) {
+                this.sectionForm.teacher_id = course.teacher_id || '';
+                this.sectionForm.preferred_building = course.preferred_building || '';
+            }
         },
         isScheduled(courseId) {
             return this.requests.some(item => item.course_id === courseId && item.status === 'scheduled');
@@ -1685,7 +1724,7 @@ createApp({
         },
         sectionSummary(course) {
             const sections = this.openSections(course);
-            if (!sections.length) return this.isRequiredCourse(course) ? '必修课计划内保障' : '暂无开放教学班';
+            if (!sections.length) return '暂无开放教学班';
             return sections.map(section => `${section.section_name}/教师${section.teacher_id || '待分配'}/${section.required_room_type || '普通教室'}/余${section.remaining_capacity}`).join('；');
         },
         adminSectionSummary(course) {
@@ -1808,14 +1847,8 @@ createApp({
             if (code.startsWith('PUB') || name.includes('公共') || name.includes('体育') || name.includes('英语') || name.includes('思政')) {
                 return { key: 'public', label: '公共课', rule: '面向多专业，建议作为通识或公共培养要求补充。' };
             }
-            const requiredKeywords = ['必修', '基础', '高等数学', '大学物理', '程序设计', '面向对象', '数字逻辑', '微机原理', '信号与系统', '通信原理'];
-            if (code.startsWith('REQ') || requiredKeywords.some(keyword => name.includes(keyword))) {
-                return { key: 'required', label: '必修课', rule: '培养方案内课程，由系统优先保障，不参与学生意向排序。' };
-            }
+            // 所有非公共课均视为选修课，不再区分必修
             return { key: 'elective', label: '专业选修课', rule: '按兴趣方向选择，建议保留备选课程。' };
-        },
-        isRequiredCourse(course) {
-            return this.courseType(course).key === 'required';
         },
         phaseName(phase, fallback = '') {
             return {
@@ -1848,7 +1881,6 @@ createApp({
         courseAdvice(course) {
             const eligibility = this.courseEligibility(course);
             if (!eligibility.ok) return `当前学生${eligibility.label}，不可提交该课程意向。`;
-            if (this.isRequiredCourse(course)) return '必修课通常由培养方案统一保障，学生无需按选课意向抢选。';
             if (Number(course.active_request_count) > Number(course.capacity)) return '报名人数已超过容量，建议同时选择备选课程。';
             if (this.capacityPercent(course) >= 80) return '课程热度较高，建议尽早提交并保留备选意向。';
             return '当前容量相对充足，可按兴趣和时间偏好选择。';
@@ -1901,10 +1933,6 @@ createApp({
             try {
                 if (!this.isSelectionOpen) {
                     this.showToast(`当前选课批次${this.selectionWindowState.label}，暂不能提交意向`);
-                    return;
-                }
-                if (this.isRequiredCourse(course)) {
-                    this.showToast('必修课属于培养方案保障课程，不需要提交选课意向');
                     return;
                 }
                 const eligibility = this.courseEligibility(course);
@@ -2199,6 +2227,24 @@ createApp({
                 this.showToast('排课结果已发布');
             } catch (err) {
                 this.showToast(err.message);
+            }
+        },
+        async syncToClassroom() {
+            if (!confirm('⚠️ 确认将排课结果同步到课堂管理系统？\n\n操作将：\n1. 备份课堂和排课数据到文件\n2. 清空课堂旧学生数据\n3. 导入排课结果中的学生\n4. 清空排课数据以迎接新学期\n\n此操作不可撤销，请确认。')) return;
+            this.syncRunning = true;
+            try {
+                const data = await this.api('/api/course-schedule/sync-to-classroom', { method: 'POST' });
+                let msg = `同步完成！\n`;
+                if (data.report && data.report.steps) {
+                    msg += data.report.steps.join('\n');
+                }
+                alert(msg);
+                await this.loadAdminData();
+                this.pushAudit('同步到课堂', data.report ? data.report.steps.join('; ') : '完成');
+            } catch (err) {
+                alert('同步失败：' + err.message);
+            } finally {
+                this.syncRunning = false;
             }
         },
         printSchedule() {

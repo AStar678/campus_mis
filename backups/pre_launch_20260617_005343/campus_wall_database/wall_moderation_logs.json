@@ -1,0 +1,66 @@
+[
+  {
+    "id": 1,
+    "post_id": 4,
+    "admin_id": "admin",
+    "action": "pass",
+    "reason": "内容违规",
+    "created_at": "2026-06-10T17:40:26"
+  },
+  {
+    "id": 2,
+    "post_id": 23,
+    "admin_id": "admin",
+    "action": "pass",
+    "reason": "误报已恢复",
+    "created_at": "2026-06-10T17:40:26"
+  },
+  {
+    "id": 3,
+    "post_id": 37,
+    "admin_id": "admin",
+    "action": "delete",
+    "reason": "内容违规",
+    "created_at": "2026-06-10T17:40:26"
+  },
+  {
+    "id": 4,
+    "post_id": 7,
+    "admin_id": "admin",
+    "action": "pass",
+    "reason": "误报已恢复",
+    "created_at": "2026-06-10T17:40:26"
+  },
+  {
+    "id": 5,
+    "post_id": 8,
+    "admin_id": "admin",
+    "action": "pass",
+    "reason": "举报核实",
+    "created_at": "2026-06-10T17:40:26"
+  },
+  {
+    "id": 6,
+    "post_id": 53,
+    "admin_id": "admin",
+    "action": "delete",
+    "reason": "管理员删除违规内容",
+    "created_at": "2026-06-13T22:31:04"
+  },
+  {
+    "id": 7,
+    "post_id": 59,
+    "admin_id": "admin",
+    "action": "delete",
+    "reason": "管理员删除违规内容",
+    "created_at": "2026-06-13T22:49:24"
+  },
+  {
+    "id": 8,
+    "post_id": 62,
+    "admin_id": "admin",
+    "action": "delete",
+    "reason": "管理员删除违规内容",
+    "created_at": "2026-06-15T20:23:50"
+  }
+]

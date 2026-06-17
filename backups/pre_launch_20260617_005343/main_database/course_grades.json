@@ -1,0 +1,506 @@
+[
+  {
+    "id": 1,
+    "course_id": 12,
+    "student_id": "20240032",
+    "score": 56.6,
+    "comment": "继续努力",
+    "updated_by": "1010",
+    "updated_at": "2026-06-10T17:40:21"
+  },
+  {
+    "id": 2,
+    "course_id": 12,
+    "student_id": "20240024",
+    "score": 51.3,
+    "comment": "优秀",
+    "updated_by": "1006",
+    "updated_at": "2026-06-10T17:40:21"
+  },
+  {
+    "id": 3,
+    "course_id": 9,
+    "student_id": "20240008",
+    "score": 67.1,
+    "comment": "需要加强",
+    "updated_by": "1006",
+    "updated_at": "2026-06-10T17:40:21"
+  },
+  {
+    "id": 4,
+    "course_id": 6,
+    "student_id": "20240006",
+    "score": 52.2,
+    "comment": "良好",
+    "updated_by": "1003",
+    "updated_at": "2026-06-10T17:40:21"
+  },
+  {
+    "id": 5,
+    "course_id": 11,
+    "student_id": "20250019",
+    "score": 89.8,
+    "comment": "继续努力",
+    "updated_by": "1004",
+    "updated_at": "2026-06-10T17:40:21"
+  },
+  {
+    "id": 6,
+    "course_id": 5,
+    "student_id": "20240032",
+    "score": 85.2,
+    "comment": "良好",
+    "updated_by": "1001",
+    "updated_at": "2026-06-10T17:40:21"
+  },
+  {
+    "id": 7,
+    "course_id": 14,
+    "student_id": "20230001",
+    "score": 88.8,
+    "comment": "中等",
+    "updated_by": "1016",
+    "updated_at": "2026-06-10T17:40:21"
+  },
+  {
+    "id": 8,
+    "course_id": 4,
+    "student_id": "20240034",
+    "score": 82.3,
+    "comment": "及格",
+    "updated_by": "1003",
+    "updated_at": "2026-06-10T17:40:21"
+  },
+  {
+    "id": 9,
+    "course_id": 5,
+    "student_id": "20240002",
+    "score": 63.2,
+    "comment": "进步明显",
+    "updated_by": "1016",
+    "updated_at": "2026-06-10T17:40:21"
+  },
+  {
+    "id": 10,
+    "course_id": 10,
+    "student_id": "20240011",
+    "score": 88.9,
+    "comment": "良好",
+    "updated_by": "1013",
+    "updated_at": "2026-06-10T17:40:21"
+  },
+  {
+    "id": 11,
+    "course_id": 8,
+    "student_id": "20240004",
+    "score": 52.8,
+    "comment": "及格",
+    "updated_by": "1013",
+    "updated_at": "2026-06-10T17:40:21"
+  },
+  {
+    "id": 12,
+    "course_id": 9,
+    "student_id": "20240030",
+    "score": 64.0,
+    "comment": "及格",
+    "updated_by": "1011",
+    "updated_at": "2026-06-10T17:40:21"
+  },
+  {
+    "id": 13,
+    "course_id": 7,
+    "student_id": "20240031",
+    "score": 66.4,
+    "comment": "中等",
+    "updated_by": "1009",
+    "updated_at": "2026-06-10T17:40:21"
+  },
+  {
+    "id": 14,
+    "course_id": 16,
+    "student_id": "20240030",
+    "score": 64.5,
+    "comment": "继续努力",
+    "updated_by": "1014",
+    "updated_at": "2026-06-10T17:40:21"
+  },
+  {
+    "id": 15,
+    "course_id": 3,
+    "student_id": "20240034",
+    "score": 56.8,
+    "comment": "优秀",
+    "updated_by": "1004",
+    "updated_at": "2026-06-10T17:40:21"
+  },
+  {
+    "id": 16,
+    "course_id": 1,
+    "student_id": "20230001",
+    "score": 70.2,
+    "comment": "需要加强",
+    "updated_by": "1012",
+    "updated_at": "2026-06-10T17:40:21"
+  },
+  {
+    "id": 17,
+    "course_id": 17,
+    "student_id": "20240020",
+    "score": 58.1,
+    "comment": "进步明显",
+    "updated_by": "1001",
+    "updated_at": "2026-06-10T17:40:21"
+  },
+  {
+    "id": 18,
+    "course_id": 1,
+    "student_id": "20240021",
+    "score": 52.9,
+    "comment": "需要加强",
+    "updated_by": "1010",
+    "updated_at": "2026-06-10T17:40:21"
+  },
+  {
+    "id": 19,
+    "course_id": 15,
+    "student_id": "20240023",
+    "score": 75.9,
+    "comment": "继续努力",
+    "updated_by": "1010",
+    "updated_at": "2026-06-10T17:40:21"
+  },
+  {
+    "id": 20,
+    "course_id": 4,
+    "student_id": "20240033",
+    "score": 75.5,
+    "comment": "及格",
+    "updated_by": "1012",
+    "updated_at": "2026-06-10T17:40:21"
+  },
+  {
+    "id": 21,
+    "course_id": 14,
+    "student_id": "20250017",
+    "score": 91.6,
+    "comment": "中等",
+    "updated_by": "1014",
+    "updated_at": "2026-06-10T17:40:21"
+  },
+  {
+    "id": 22,
+    "course_id": 16,
+    "student_id": "20250014",
+    "score": 87.4,
+    "comment": "中等",
+    "updated_by": "1008",
+    "updated_at": "2026-06-10T17:40:21"
+  },
+  {
+    "id": 23,
+    "course_id": 8,
+    "student_id": "20250016",
+    "score": 100.0,
+    "comment": "良好",
+    "updated_by": "1013",
+    "updated_at": "2026-06-10T17:40:21"
+  },
+  {
+    "id": 24,
+    "course_id": 13,
+    "student_id": "20240025",
+    "score": 70.8,
+    "comment": "及格",
+    "updated_by": "1014",
+    "updated_at": "2026-06-10T17:40:22"
+  },
+  {
+    "id": 25,
+    "course_id": 11,
+    "student_id": "20240022",
+    "score": 89.2,
+    "comment": "优秀",
+    "updated_by": "1005",
+    "updated_at": "2026-06-10T17:40:22"
+  },
+  {
+    "id": 26,
+    "course_id": 14,
+    "student_id": "20240008",
+    "score": 82.7,
+    "comment": "需要加强",
+    "updated_by": "1001",
+    "updated_at": "2026-06-10T17:40:22"
+  },
+  {
+    "id": 27,
+    "course_id": 12,
+    "student_id": "20240023",
+    "score": 90.7,
+    "comment": "表现突出",
+    "updated_by": "1007",
+    "updated_at": "2026-06-10T17:40:22"
+  },
+  {
+    "id": 28,
+    "course_id": 17,
+    "student_id": "20240035",
+    "score": 98.8,
+    "comment": "良好",
+    "updated_by": "1006",
+    "updated_at": "2026-06-10T17:40:22"
+  },
+  {
+    "id": 29,
+    "course_id": 13,
+    "student_id": "20240037",
+    "score": 80.2,
+    "comment": "及格",
+    "updated_by": "1010",
+    "updated_at": "2026-06-10T17:40:22"
+  },
+  {
+    "id": 30,
+    "course_id": 10,
+    "student_id": "20240034",
+    "score": 98.7,
+    "comment": "优秀",
+    "updated_by": "1009",
+    "updated_at": "2026-06-10T17:40:22"
+  },
+  {
+    "id": 31,
+    "course_id": 5,
+    "student_id": "20250015",
+    "score": 62.0,
+    "comment": "继续努力",
+    "updated_by": "1013",
+    "updated_at": "2026-06-10T17:40:22"
+  },
+  {
+    "id": 32,
+    "course_id": 16,
+    "student_id": "20240025",
+    "score": 86.6,
+    "comment": "良好",
+    "updated_by": "1006",
+    "updated_at": "2026-06-10T17:40:22"
+  },
+  {
+    "id": 33,
+    "course_id": 17,
+    "student_id": "20240023",
+    "score": 60.2,
+    "comment": "进步明显",
+    "updated_by": "1001",
+    "updated_at": "2026-06-10T17:40:22"
+  },
+  {
+    "id": 34,
+    "course_id": 6,
+    "student_id": "20240034",
+    "score": 68.1,
+    "comment": "及格",
+    "updated_by": "1012",
+    "updated_at": "2026-06-10T17:40:22"
+  },
+  {
+    "id": 35,
+    "course_id": 1,
+    "student_id": "20250016",
+    "score": 80.8,
+    "comment": "及格",
+    "updated_by": "1004",
+    "updated_at": "2026-06-10T17:40:22"
+  },
+  {
+    "id": 36,
+    "course_id": 11,
+    "student_id": "20240039",
+    "score": 51.6,
+    "comment": "中等",
+    "updated_by": "1004",
+    "updated_at": "2026-06-10T17:40:22"
+  },
+  {
+    "id": 37,
+    "course_id": 5,
+    "student_id": "20250019",
+    "score": 94.6,
+    "comment": "优秀",
+    "updated_by": "1007",
+    "updated_at": "2026-06-10T17:40:22"
+  },
+  {
+    "id": 38,
+    "course_id": 12,
+    "student_id": "20240012",
+    "score": 51.1,
+    "comment": "表现突出",
+    "updated_by": "1016",
+    "updated_at": "2026-06-10T17:40:22"
+  },
+  {
+    "id": 39,
+    "course_id": 12,
+    "student_id": "20240033",
+    "score": 86.1,
+    "comment": "及格",
+    "updated_by": "1001",
+    "updated_at": "2026-06-10T17:40:22"
+  },
+  {
+    "id": 40,
+    "course_id": 17,
+    "student_id": "20240033",
+    "score": 63.3,
+    "comment": "继续努力",
+    "updated_by": "1005",
+    "updated_at": "2026-06-10T17:40:22"
+  },
+  {
+    "id": 41,
+    "course_id": 17,
+    "student_id": "20250013",
+    "score": 88.1,
+    "comment": "良好",
+    "updated_by": "1001",
+    "updated_at": "2026-06-10T17:40:22"
+  },
+  {
+    "id": 42,
+    "course_id": 17,
+    "student_id": "20240003",
+    "score": 80.9,
+    "comment": "进步明显",
+    "updated_by": "1003",
+    "updated_at": "2026-06-10T17:40:22"
+  },
+  {
+    "id": 43,
+    "course_id": 3,
+    "student_id": "20240019",
+    "score": 93.3,
+    "comment": "进步明显",
+    "updated_by": "1012",
+    "updated_at": "2026-06-10T17:40:22"
+  },
+  {
+    "id": 44,
+    "course_id": 15,
+    "student_id": "20250008",
+    "score": 58.7,
+    "comment": "继续努力",
+    "updated_by": "1011",
+    "updated_at": "2026-06-10T17:40:22"
+  },
+  {
+    "id": 45,
+    "course_id": 1,
+    "student_id": "20240025",
+    "score": 93.0,
+    "comment": "继续努力",
+    "updated_by": "1009",
+    "updated_at": "2026-06-10T17:40:22"
+  },
+  {
+    "id": 46,
+    "course_id": 11,
+    "student_id": "20250003",
+    "score": 84.1,
+    "comment": "表现突出",
+    "updated_by": "1010",
+    "updated_at": "2026-06-10T17:40:22"
+  },
+  {
+    "id": 47,
+    "course_id": 8,
+    "student_id": "20250010",
+    "score": 54.7,
+    "comment": "进步明显",
+    "updated_by": "1013",
+    "updated_at": "2026-06-10T17:40:22"
+  },
+  {
+    "id": 48,
+    "course_id": 6,
+    "student_id": "20250014",
+    "score": 56.8,
+    "comment": "继续努力",
+    "updated_by": "1003",
+    "updated_at": "2026-06-10T17:40:22"
+  },
+  {
+    "id": 49,
+    "course_id": 15,
+    "student_id": "20240031",
+    "score": 94.5,
+    "comment": "进步明显",
+    "updated_by": "1003",
+    "updated_at": "2026-06-10T17:40:22"
+  },
+  {
+    "id": 50,
+    "course_id": 16,
+    "student_id": "20250001",
+    "score": 57.8,
+    "comment": "继续努力",
+    "updated_by": "1008",
+    "updated_at": "2026-06-10T17:40:22"
+  },
+  {
+    "id": 51,
+    "course_id": 11,
+    "student_id": "20250007",
+    "score": 72.9,
+    "comment": "继续保持",
+    "updated_by": "1007",
+    "updated_at": "2026-06-10T17:40:54"
+  },
+  {
+    "id": 54,
+    "course_id": 16,
+    "student_id": "20250015",
+    "score": 67.7,
+    "comment": "继续保持",
+    "updated_by": "1004",
+    "updated_at": "2026-06-10T17:40:54"
+  },
+  {
+    "id": 55,
+    "course_id": 7,
+    "student_id": "20240012",
+    "score": 85.4,
+    "comment": "继续保持",
+    "updated_by": "1009",
+    "updated_at": "2026-06-10T17:40:54"
+  },
+  {
+    "id": 59,
+    "course_id": 8,
+    "student_id": "20250018",
+    "score": 78.6,
+    "comment": "需要加强",
+    "updated_by": "1009",
+    "updated_at": "2026-06-10T17:40:55"
+  },
+  {
+    "id": 64,
+    "course_id": 10,
+    "student_id": "20250001",
+    "score": 67.4,
+    "comment": "不错",
+    "updated_by": "1015",
+    "updated_at": "2026-06-10T17:40:55"
+  },
+  {
+    "id": 65,
+    "course_id": 8,
+    "student_id": "20230001",
+    "score": 64.3,
+    "comment": "不错",
+    "updated_by": "1003",
+    "updated_at": "2026-06-10T17:40:55"
+  }
+]

@@ -1,0 +1,44 @@
+[
+  {
+    "id": 270,
+    "semester": "2025-2026-2",
+    "course_id": 19,
+    "student_id": "20230001",
+    "final_grade": null
+  },
+  {
+    "id": 271,
+    "semester": "2025-2026-2",
+    "course_id": 5,
+    "student_id": "20230002",
+    "final_grade": null
+  },
+  {
+    "id": 272,
+    "semester": "2025-2026-2",
+    "course_id": 19,
+    "student_id": "20230001",
+    "final_grade": null
+  },
+  {
+    "id": 273,
+    "semester": "2025-2026-2",
+    "course_id": 5,
+    "student_id": "20230002",
+    "final_grade": null
+  },
+  {
+    "id": 274,
+    "semester": "2025-2026-2",
+    "course_id": 19,
+    "student_id": "20230001",
+    "final_grade": null
+  },
+  {
+    "id": 275,
+    "semester": "2025-2026-2",
+    "course_id": 5,
+    "student_id": "20230002",
+    "final_grade": null
+  }
+]
