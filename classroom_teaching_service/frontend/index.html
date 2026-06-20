@@ -1,0 +1,1688 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>课堂教学服务</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    :root {
+      color-scheme: light;
+      --ink: #172033;
+      --muted: #667085;
+      --line: #d8e0ea;
+      --soft: #f5f7fa;
+      --panel: #ffffff;
+      --blue: #2158c8;
+      --green: #12715b;
+      --red: #b42318;
+      --amber: #a15c07;
+    }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(180deg, #eaf1fb 0, #f7f9fc 320px, #eef2f6 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    button, input, select, textarea { font: inherit; }
+    button { border: 0; cursor: pointer; }
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 9px 11px;
+      color: var(--ink);
+      background: #fff;
+    }
+    textarea { min-height: 92px; resize: vertical; }
+    h1, h2, h3, p { margin: 0; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      min-height: 38px;
+      padding: 9px 14px;
+      border-radius: 8px;
+      color: #fff;
+      background: var(--blue);
+      white-space: nowrap;
+    }
+    .btn:hover { filter: brightness(.94); }
+    .btn.secondary { color: #233044; background: #e8edf3; }
+    .btn.success { background: var(--green); }
+    .btn.danger { background: var(--red); }
+    .btn.full { width: 100%; }
+    .shell { min-height: 100vh; display: grid; grid-template-rows: auto 1fr; }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 14px 24px;
+      background: rgba(255,255,255,.9);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(10px);
+    }
+    .brand { display: grid; gap: 2px; }
+    .brand strong { font-size: 18px; }
+    .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .workspace {
+      width: min(1440px, 100%);
+      margin: 0 auto;
+      padding: 22px;
+      display: grid;
+      gap: 18px;
+    }
+    .dashboard {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 18px;
+      align-items: start;
+    }
+    .panel, .card, .sidebar {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: 0 12px 28px rgba(15, 23, 42, .05);
+    }
+    .panel, .sidebar { padding: 16px; }
+    .main { display: grid; gap: 16px; min-width: 0; }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .section-head h2 { font-size: 20px; letter-spacing: 0; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .stat {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: linear-gradient(180deg, #fff, #f9fbff);
+    }
+    .stat strong { display: block; margin-top: 6px; font-size: 24px; }
+    .filters {
+      display: grid;
+      grid-template-columns: 1.6fr repeat(4, minmax(120px, 1fr));
+      gap: 10px;
+      align-items: end;
+      margin-bottom: 14px;
+    }
+    .course-list { display: grid; gap: 10px; }
+    .course-item {
+      width: 100%;
+      text-align: left;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--ink);
+    }
+    .course-item.active { border-color: var(--blue); background: #edf4ff; }
+    .course-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 12px;
+    }
+    .course-card {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+    }
+    .course-card:hover, .course-item:hover, .ddl-card:hover {
+      transform: translateY(-1px);
+      border-color: #9db7e8;
+      box-shadow: 0 16px 34px rgba(33, 88, 200, .10);
+    }
+    .course-card h3 { font-size: 17px; margin-bottom: 8px; }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .meta {
+      padding: 9px 10px;
+      border: 1px solid #e4e9f0;
+      border-radius: 8px;
+      background: #f9fafb;
+      min-height: 52px;
+    }
+    .meta span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 3px; }
+    .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    .tab {
+      min-height: 34px;
+      padding: 7px 12px;
+      border-radius: 8px;
+      color: #334155;
+      background: #e8edf3;
+    }
+    .tab.active { color: #fff; background: #1f2937; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .stack { display: grid; gap: 10px; }
+    .card { padding: 14px; }
+    .card-title { font-weight: 700; margin-bottom: 6px; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      color: #0f5132;
+      background: #dff4e7;
+      font-size: 13px;
+    }
+    .pill.blue { color: #1d4ed8; background: #dbeafe; }
+    .pill.amber { color: var(--amber); background: #fff3d6; }
+    .hero-strip {
+      display: grid;
+      grid-template-columns: 1.45fr repeat(3, minmax(140px, .55fr));
+      gap: 12px;
+      align-items: stretch;
+    }
+    .hero-card {
+      padding: 18px;
+      border-radius: 8px;
+      color: #fff;
+      background:
+        linear-gradient(135deg, rgba(14, 91, 120, .88), rgba(33, 88, 200, .92)),
+        url("https://images.unsplash.com/photo-1498243691581-b145c3f54a5a?auto=format&fit=crop&w=1200&q=80") center/cover;
+      min-height: 150px;
+      display: grid;
+      align-content: end;
+    }
+    .hero-card h2 { font-size: 25px; margin-bottom: 8px; }
+    .hero-card p { color: rgba(255,255,255,.9); line-height: 1.6; }
+    .quick-card {
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      display: grid;
+      align-content: center;
+      gap: 4px;
+    }
+    .quick-card strong { font-size: 26px; }
+    .ddl-card {
+      width: 100%;
+      text-align: left;
+      padding: 13px;
+      color: var(--ink);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      display: block;
+    }
+    .ddl-card.active { border-color: var(--blue); background: #edf4ff; }
+    .ai-status {
+      padding: 12px;
+      border: 1px solid #c7d7f4;
+      border-radius: 8px;
+      background: #f0f6ff;
+      color: #1e3a8a;
+    }
+    .grade-sheet {
+      border: 1px solid #9f2f24;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .grade-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 42px;
+      padding: 0 16px;
+      color: #fff;
+      background: #8a1d12;
+      font-weight: 700;
+      font-size: 16px;
+    }
+    .grade-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      min-width: 760px;
+    }
+    .grade-table th,
+    .grade-table td {
+      padding: 14px 16px;
+      border-bottom: 1px solid #e6eaf0;
+      text-align: left;
+    }
+    .grade-table th {
+      background: #fff;
+      color: #172033;
+      font-weight: 700;
+    }
+    .grade-table .group-row td {
+      background: #cfeaf0;
+      font-weight: 700;
+    }
+    .grade-table .child-row td:first-child {
+      padding-left: 48px;
+    }
+    .grade-table .total-row td {
+      background: #fff2bd;
+      font-weight: 700;
+      border-bottom: 0;
+    }
+    .affairs-shell {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .affairs-side {
+      background: #f3f5f7;
+      border-right: 1px solid var(--line);
+      min-height: 520px;
+    }
+    .affairs-user {
+      padding: 16px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+    }
+    .affairs-menu {
+      display: grid;
+      padding: 10px 0;
+    }
+    .affairs-menu button {
+      text-align: left;
+      padding: 12px 18px;
+      color: #475467;
+      background: transparent;
+      border-left: 4px solid transparent;
+    }
+    .affairs-menu button.active {
+      color: #2158c8;
+      background: #eef4ff;
+      border-left-color: #5b8ec0;
+    }
+    .affairs-main { min-width: 0; }
+    .affairs-top {
+      padding: 12px 16px;
+      color: #fff;
+      background: #5b8ec0;
+      font-weight: 700;
+    }
+    .affairs-filters {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr auto;
+      gap: 14px;
+      align-items: end;
+      padding: 16px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+    }
+    .detail-btn {
+      min-height: 28px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      color: #7a5810;
+      background: #ffe58f;
+    }
+    .transcript-summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      padding: 16px;
+    }
+    .transcript-summary .stat strong { font-size: 22px; }
+    .empty {
+      padding: 26px;
+      text-align: center;
+      color: var(--muted);
+      border: 1px dashed #b7c4d2;
+      border-radius: 8px;
+      background: #f8fafc;
+    }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+    table { width: 100%; min-width: 760px; border-collapse: collapse; background: #fff; }
+    th, td { padding: 10px 12px; border-bottom: 1px solid #e8edf3; text-align: left; vertical-align: top; }
+    th { color: #536174; font-size: 13px; background: #f8fafc; }
+    tr:last-child td { border-bottom: 0; }
+    .toast {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 30;
+      padding: 10px 16px;
+      color: #fff;
+      background: #172033;
+      border-radius: 8px;
+      box-shadow: 0 14px 30px rgba(15, 23, 42, .24);
+    }
+    @media (max-width: 980px) {
+      .dashboard { grid-template-columns: 1fr; }
+      .stats, .filters, .grid-2, .grid-3, .hero-strip, .affairs-shell, .affairs-filters { grid-template-columns: 1fr; }
+      .workspace { padding: 14px; }
+      .topbar { align-items: flex-start; flex-direction: column; }
+    }
+    label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 4px; }
+    label.required::after { content: " *"; color: #dc2626; font-weight: 700; }
+    span.optional { font-weight: 400; color: #94a3b8; font-size: 12px; }
+    .field textarea { width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 9px 11px; font: inherit; color: var(--ink); background: #fff; min-height: 70px; resize: vertical; }
+    .msg.error {
+      padding: 10px 14px;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      background: #fef2f2;
+      color: #991b1b;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div class="toast" v-if="toast">{{ toast }}</div>
+
+  <main class="shell" v-if="token">
+    <header class="topbar">
+      <div class="brand">
+        <strong>课堂教学服务</strong>
+        <span class="muted">{{ roleLabel }} · {{ user.name }} · {{ user.user_id }}</span>
+      </div>
+      <div class="actions">
+        <span v-if="isReadonlySemester" class="pill amber" style="margin-right:8px;">🔒 历史学期 · 只读</span>
+        <select v-model="currentSemester" @change="onSemesterChange" style="width:auto; min-width:160px;">
+          <option v-for="s in availableSemesters" :value="s">{{ s }}{{ s === activeSemester ? ' (当前)' : '' }}</option>
+        </select>
+        <button class="btn secondary" @click="loadAll">刷新</button>
+        <button class="btn danger" @click="logout">退出</button>
+      </div>
+    </header>
+
+    <section class="workspace">
+      <template v-if="user.user_type === 'student'">
+
+        <!-- ═══ 学生端：主页面（标签切换：课程查询 / DDL 管理 / 历史成绩） ═══ -->
+        <template v-if="!studentCourseView">
+          <section class="hero-strip">
+            <div class="hero-card">
+              <h2>我的课堂教学</h2>
+              <p>查课程、看 DDL、交作业、看历史成绩，都集中在这一页。</p>
+            </div>
+            <div class="quick-card" @click="studentMainTab='courses'" style="cursor:pointer;"><span class="muted">可见课程</span><strong>{{ courses.length }}</strong></div>
+            <div class="quick-card" @click="studentMainTab='ddl'" style="cursor:pointer;"><span class="muted">最近 DDL</span><strong>{{ ddls.length }}</strong></div>
+            <div class="quick-card" @click="studentMainTab='grades'" style="cursor:pointer;"><span class="muted">成绩记录</span><strong>{{ allGrades.length }}</strong></div>
+          </section>
+
+          <section class="panel">
+            <div class="tabs" style="margin-bottom:16px;">
+              <button class="tab" :class="{ active: studentMainTab === 'courses' }" @click="studentMainTab='courses'">📚 课程查询</button>
+              <button class="tab" :class="{ active: studentMainTab === 'ddl' }" @click="studentMainTab='ddl'">⏰ DDL 管理</button>
+              <button class="tab" :class="{ active: studentMainTab === 'grades' }" @click="studentMainTab='grades'">📝 历史成绩</button>
+            </div>
+
+            <!-- 课程查询 -->
+            <div v-if="studentMainTab === 'courses'">
+              <div class="section-head">
+                <div>
+                  <h2>课程查询</h2>
+                  <p class="muted">按课程名称、必修/选修、授课语言、授课方式和学分筛选。点击课程卡片可进入详情。</p>
+                </div>
+              </div>
+              <div class="filters">
+                <div class="field"><label>关键词</label><input v-model.trim="filters.keyword" placeholder="课程名、编号、地点"></div>
+                <div class="field"><label>类型</label><select v-model="filters.course_type"><option value="">全部</option><option>必修</option><option>选修</option></select></div>
+                <div class="field"><label>语言</label><select v-model="filters.language"><option value="">全部</option><option>中文</option><option>英文</option></select></div>
+                <div class="field"><label>授课方式</label><select v-model="filters.teaching_method"><option value="">全部</option><option>线下</option><option>线上</option><option>混合</option><option>实验</option></select></div>
+                <div class="actions"><button class="btn" @click="loadCourses">筛选</button><button class="btn secondary" @click="clearFilters">清空</button></div>
+              </div>
+              <div class="course-grid">
+                <article class="course-card" v-for="course in courses" :key="course.id" @click="openStudentCourse(course, 'announcements')" style="cursor:pointer;">
+                  <div class="actions" style="justify-content:space-between; margin-bottom:8px;">
+                    <span class="pill blue">{{ course.course_type }}</span>
+                    <span class="pill">{{ course.credits }} 学分</span>
+                  </div>
+                  <h3>{{ course.name }}</h3>
+                  <p class="muted">{{ course.code }} · {{ course.description || '暂无课程说明' }}</p>
+                  <div class="meta-grid">
+                    <div class="meta"><span>上课时间</span>{{ course.class_time || '-' }}</div>
+                    <div class="meta"><span>地点</span>{{ course.location || '-' }}</div>
+                    <div class="meta"><span>教师</span>{{ course.teacher_name }}</div>
+                    <div class="meta"><span>授课语言</span>{{ course.language }}</div>
+                    <div class="meta"><span>授课方式</span>{{ course.teaching_method }}</div>
+                    <div class="meta"><span>面向对象</span>{{ course.target_grade || '不限' }} · {{ course.target_major || '不限' }}</div>
+                  </div>
+                </article>
+              </div>
+              <div class="empty" v-if="!courses.length">没有符合条件的课程</div>
+            </div>
+
+            <!-- DDL 管理 -->
+            <div v-if="studentMainTab === 'ddl'">
+              <div class="section-head"><h2>DDL 管理</h2></div>
+              <div class="grid-2" style="margin-bottom:14px; align-items:end;">
+                <div class="field"><label>搜索 DDL</label><input v-model.trim="ddlKeyword" placeholder="输入标题或课程名搜索..."></div>
+                <div class="actions"><button class="btn secondary" @click="ddlKeyword=''">清空搜索</button></div>
+              </div>
+              <form class="grid-3" @submit.prevent="createDdl" style="margin-bottom:14px;" v-if="!isReadonlySemester">
+                <div class="field"><label>标题</label><input v-model.trim="ddlForm.title" placeholder="例如：复习第三章"></div>
+                <div class="field"><label>截止时间</label><input type="datetime-local" v-model="ddlForm.due_at"></div>
+                <div class="field"><label>关联课程</label><select v-model="ddlForm.course_id"><option value="">不关联课程</option><option v-for="course in courses" :key="course.id" :value="course.id">{{ course.name }}</option></select></div>
+                <div class="actions"><button class="btn">添加 DDL</button></div>
+              </form>
+              <p class="muted" v-else style="margin-bottom:14px;">🔒 历史学期数据只读，无法添加 DDL</p>
+              <div class="stack" v-if="ddls.length">
+                <article class="card" v-if="selectedDdl">
+                  <div class="actions" style="justify-content:space-between;">
+                    <div>
+                      <div class="card-title">{{ selectedDdl.title }}</div>
+                      <div class="muted">截止：{{ selectedDdl.due_at }}</div>
+                    </div>
+                    <div class="actions">
+                      <span class="pill amber">{{ selectedDdl.status }}</span>
+                      <button class="btn danger" v-if="!selectedDdl.readonly && !isReadonlySemester" @click="deleteDdl(selectedDdl)">删除</button>
+                    </div>
+                  </div>
+                  <p class="muted" style="margin-top:10px;">请根据截止时间安排提交或复习。作业类 DDL 会自动来自教师发布的作业。</p>
+                </article>
+                <div class="ddl-card" v-for="item in filteredDdls" :key="item.id" :class="{ active: selectedDdl && selectedDdl.id === item.id }" @click="selectedDdl = item" style="cursor:pointer;">
+                  <strong>{{ item.title }}</strong>
+                  <div class="muted">截止：{{ item.due_at }} · {{ item.status }}{{ item.readonly ? ' · 作业自动生成' : '' }}</div>
+                  <div class="actions" style="margin-top:6px;" v-if="!item.readonly && !isReadonlySemester" @click.stop>
+                    <button class="btn danger" @click="deleteDdl(item)">删除</button>
+                  </div>
+                </div>
+              </div>
+              <div class="empty" v-else>暂无 DDL</div>
+            </div>
+
+            <!-- 全部历史成绩 -->
+            <div v-if="studentMainTab === 'grades'">
+              <div class="section-head"><h2>全部历史成绩</h2></div>
+              <overall-grades-view :grades="allGrades" :user="user" @detail="handleGradeDetail"></overall-grades-view>
+            </div>
+          </section>
+        </template>
+
+        <!-- ═══ 学生端：课程详情全屏视图 ═══ -->
+        <template v-else-if="selectedCourse">
+          <section class="panel">
+            <div class="section-head">
+              <div>
+                <h2>{{ selectedCourse.name }}</h2>
+                <p class="muted">{{ selectedCourse.code }} · {{ selectedCourse.teacher_name }}</p>
+              </div>
+              <button class="btn secondary" @click="exitStudentCourse">← 返回课程列表</button>
+            </div>
+          </section>
+
+          <section class="dashboard">
+            <aside class="sidebar">
+              <div class="section-head"><h2>我的课程</h2></div>
+              <div class="course-list">
+                <button v-for="course in courses" :key="course.id" class="course-item" :class="{ active: selectedCourseId === course.id }" @click="switchStudentCourse(course)">
+                  <strong>{{ course.name }}</strong>
+                  <div class="muted">{{ course.class_time }} · {{ course.location }}</div>
+                </button>
+              </div>
+            </aside>
+
+            <div class="main">
+              <div class="tabs">
+                <button class="tab" :class="{ active: activeTab === 'announcements' }" @click="activeTab='announcements'">公告</button>
+                <button class="tab" :class="{ active: activeTab === 'assignments' }" @click="activeTab='assignments'">作业提交</button>
+                <button class="tab" :class="{ active: activeTab === 'grades' }" @click="activeTab='grades'">我的成绩</button>
+              </div>
+              <course-summary :course="selectedCourse"></course-summary>
+              <announcements-view v-if="activeTab==='announcements'" :announcements="announcements"></announcements-view>
+              <student-assignments v-if="activeTab==='assignments'" :assignments="assignments" :files="submissionFiles" :readonly="isReadonlySemester" @submit="submitAssignment"></student-assignments>
+              <course-grade-sheet v-if="activeTab==='grades'" :course="selectedCourse" :grades="grades"></course-grade-sheet>
+            </div>
+          </section>
+        </template>
+      </template>
+
+      <template v-if="user.user_type === 'teacher'">
+        <!-- ======= 提交详情全屏界面 ======= -->
+        <section v-if="submissionView" class="panel" style="min-height:80vh;">
+          <div class="section-head">
+            <div>
+              <h2>{{ submissionViewAssignment.title }} — 学生提交</h2>
+              <p class="muted">共 {{ submissions.length }} 份提交 · 待复核 {{ submissions.filter(s => s.review_status === '待复核').length }} 份</p>
+            </div>
+            <button class="btn secondary" @click="exitSubmissionView">← 返回课程</button>
+          </div>
+          <div class="stack" style="margin-top:16px;">
+            <article class="card" v-for="sub in submissions" :key="sub.id" style="border:1px solid var(--line); border-radius:8px;">
+              <div class="section-head">
+                <div>
+                  <div class="card-title">{{ sub.student_name }} ({{ sub.student_id }})</div>
+                  <div class="muted">提交时间：{{ sub.submitted_at }} · <span class="pill amber">{{ sub.review_status }}</span></div>
+                </div>
+                <div class="actions">
+                  <span class="pill">AI {{ sub.ai_score }} 分</span>
+                  <span class="pill blue" v-if="sub.teacher_score !== null">教师 {{ sub.teacher_score }} 分</span>
+                </div>
+              </div>
+              <!-- 学生提交内容 -->
+              <div style="margin-top:12px; padding:14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
+                <div style="font-weight:600; margin-bottom:8px; color:#334155;">📝 学生提交内容</div>
+                <pre style="white-space:pre-wrap; word-break:break-all; font-size:13px; line-height:1.7; color:#1e293b; max-height:300px; overflow-y:auto; margin:0;">{{ sub.content || sub.extracted_text || '（无文本内容，可能仅提交了 PDF）' }}</pre>
+              </div>
+              <!-- AI 评分明细 -->
+              <div style="margin-top:12px; padding:14px; background:#fffbeb; border:1px solid #fde68a; border-radius:8px;">
+                <div style="font-weight:600; margin-bottom:8px; color:#92400e;">🤖 AI 评分 · {{ sub.ai_engine }}</div>
+                <div class="muted" v-for="item in sub.ai_detail" :key="item.question" style="margin-bottom:4px;">
+                  {{ item.question }}：<strong>{{ item.score }}/{{ item.max_score }}</strong> — {{ item.comment }}
+                </div>
+                <p class="muted" style="margin-top:8px;">总评：{{ sub.ai_feedback }}</p>
+              </div>
+              <!-- 教师复核区 -->
+              <div style="margin-top:12px; padding:14px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px;" v-if="!isReadonlySemester">
+                <div style="font-weight:600; margin-bottom:8px; color:#166534;">✅ 教师复核</div>
+                <div class="grid-3" style="gap:10px;">
+                  <div class="field"><label>教师评分 (0-100)</label><input type="number" min="0" max="100" step="0.1" v-model.number="reviewDrafts[sub.id].teacher_score" style="width:100%;"></div>
+                  <div class="field"><label>复核意见</label><input v-model="reviewDrafts[sub.id].teacher_feedback" placeholder="复核意见" style="width:100%;"></div>
+                  <div class="actions" style="align-self:end;">
+                    <button class="btn secondary" @click="regrade(sub)">AI 重批</button>
+                    <button class="btn success" @click="reviewSubmission(sub)">批准并更新成绩</button>
+                  </div>
+                </div>
+              </div>
+              <p class="muted" v-else style="margin-top:12px;">🔒 历史学期数据只读，无法修改评分</p>
+            </article>
+            <div class="empty" v-if="!submissions.length">暂无学生提交</div>
+          </div>
+        </section>
+
+        <!-- ═══ 教师端：主页面（标签切换） ═══ -->
+        <template v-else-if="!teacherCourseView">
+          <section class="hero-strip">
+            <div class="hero-card">
+              <h2>教师工作台</h2>
+              <p>课程管理、作业发布、AI 批改与教学数据分析。</p>
+            </div>
+            <div class="quick-card"><span class="muted">授课门数</span><strong>{{ teacherDashboard.course_count || 0 }}</strong></div>
+            <div class="quick-card"><span class="muted">总学分</span><strong>{{ teacherDashboard.credits || 0 }}</strong></div>
+            <div class="quick-card"><span class="muted">已发布作业</span><strong>{{ teacherDashboard.assignment_count || 0 }}</strong></div>
+            <div class="quick-card"><span class="muted">待复核</span><strong>{{ teacherDashboard.pending_count || 0 }}</strong></div>
+          </section>
+
+          <section class="panel">
+            <div class="tabs" style="margin-bottom:16px;">
+              <button class="tab" :class="{ active: teacherMainTab === 'courses' }" @click="teacherMainTab='courses'">📚 我的课程</button>
+              <button class="tab" :class="{ active: teacherMainTab === 'grading' }" @click="teacherMainTab='grading'">✅ 批改总览</button>
+              <button class="tab" :class="{ active: teacherMainTab === 'agent' }" @click="teacherMainTab='agent'">🤖 数据 Agent</button>
+            </div>
+
+            <!-- 我的课程 -->
+            <div v-if="teacherMainTab === 'courses'">
+              <div class="section-head">
+                <div>
+                  <h2>我的授课</h2>
+                  <p class="muted">点击课程卡片进入课程管理。</p>
+                </div>
+              </div>
+              <div class="course-grid">
+                <article class="course-card" v-for="course in courses" :key="course.id" @click="enterTeacherCourse(course)" style="cursor:pointer;">
+                  <div class="actions" style="justify-content:space-between; margin-bottom:8px;">
+                    <span class="pill blue">{{ course.course_type }}</span>
+                    <span class="pill">{{ course.credits }} 学分</span>
+                  </div>
+                  <h3>{{ course.name }}</h3>
+                  <p class="muted">{{ course.code }} · {{ course.description || '暂无课程说明' }}</p>
+                  <div class="meta-grid">
+                    <div class="meta"><span>上课时间</span>{{ course.class_time || '-' }}</div>
+                    <div class="meta"><span>地点</span>{{ course.location || '-' }}</div>
+                    <div class="meta"><span>授课语言</span>{{ course.language }}</div>
+                    <div class="meta"><span>授课方式</span>{{ course.teaching_method }}</div>
+                  </div>
+                </article>
+              </div>
+              <div class="empty" v-if="!courses.length">暂无授课课程</div>
+            </div>
+
+            <!-- 批改总览 -->
+            <div v-if="teacherMainTab === 'grading'">
+              <div class="section-head">
+                <div>
+                  <h2>AI 批改与教师批准</h2>
+                  <p class="muted">各课程待复核的提交总览。</p>
+                </div>
+              </div>
+              <div class="stack">
+                <article class="card" v-for="item in allAssignmentsForGrading" :key="item._key">
+                  <div class="section-head">
+                    <div>
+                      <div class="card-title">{{ item.title }}</div>
+                      <div class="muted">{{ item._course_name }} · 提交 {{ item.submission_count }} 份，待复核 {{ item.pending_count }} 份</div>
+                    </div>
+                    <button class="btn" @click="enterSubmissionViewForGrading(item)">进入批改</button>
+                  </div>
+                </article>
+              </div>
+              <div class="empty" v-if="!allAssignmentsForGrading.length">暂无待批改作业</div>
+            </div>
+
+            <!-- 数据 Agent -->
+            <div v-if="teacherMainTab === 'agent'">
+              <div class="section-head">
+                <div>
+                  <h2>教学数据 Agent</h2>
+                  <p class="muted">向 AI 询问教学数据相关问题。</p>
+                </div>
+                <button class="btn secondary" @click="askQuickAgent">AI 概览</button>
+              </div>
+              <div class="field"><label>问题</label><textarea v-model.trim="agentQuestion" placeholder="例如：我负责几门课？平均分是多少？哪些作业还没复核？"></textarea></div>
+              <div class="actions" style="margin-top:10px;"><button class="btn" @click="askAgent">分析</button></div>
+              <article class="card" v-if="agentAnswer" style="margin-top:12px; white-space:pre-wrap; line-height:1.7;">{{ agentAnswer }}</article>
+            </div>
+          </section>
+        </template>
+
+        <!-- ═══ 教师端：课程详情全屏视图 ═══ -->
+        <template v-else-if="selectedCourse">
+          <section class="panel">
+            <div class="section-head">
+              <div>
+                <h2>{{ selectedCourse.name }}</h2>
+                <p class="muted">{{ selectedCourse.code }} · {{ selectedCourse.teacher_name }}</p>
+              </div>
+              <button class="btn secondary" @click="exitTeacherCourse">← 返回课程列表</button>
+            </div>
+          </section>
+
+          <section class="dashboard">
+            <aside class="sidebar">
+              <div class="section-head"><h2>我的课程</h2></div>
+              <div class="course-list">
+                <button v-for="course in courses" :key="course.id" class="course-item" :class="{ active: selectedCourseId === course.id }" @click="switchTeacherCourse(course)">
+                  <strong>{{ course.name }}</strong>
+                  <div class="muted">{{ course.class_time }} · {{ course.location }}</div>
+                </button>
+              </div>
+            </aside>
+
+            <div class="main">
+              <div class="tabs">
+                <button class="tab" :class="{ active: activeTab === 'announcements' }" @click="activeTab='announcements'">公告</button>
+                <button class="tab" :class="{ active: activeTab === 'assignments' }" @click="activeTab='assignments'">作业管理</button>
+                <button class="tab" :class="{ active: activeTab === 'grades' }" @click="activeTab='grades'">成绩管理</button>
+              </div>
+              <course-summary :course="selectedCourse"></course-summary>
+
+              <section class="panel" v-if="activeTab === 'announcements'">
+                <div class="section-head"><h2>发布公告</h2></div>
+                <form class="grid-2" @submit.prevent="createAnnouncement" v-if="!isReadonlySemester">
+                  <div class="field"><label>标题</label><input v-model.trim="announcementForm.title"></div>
+                  <div class="field"><label>内容</label><textarea v-model.trim="announcementForm.content"></textarea></div>
+                  <div class="actions"><button class="btn">发布</button></div>
+                </form>
+                <p class="muted" v-else style="margin-bottom:12px;">🔒 历史学期数据只读，无法发布新公告</p>
+                <announcements-view :announcements="announcements"></announcements-view>
+              </section>
+
+              <section class="panel" v-if="activeTab === 'assignments'">
+                <div class="section-head"><h2>发布作业</h2></div>
+                <form class="grid-3" @submit.prevent="createAssignment" v-if="!isReadonlySemester">
+                  <div class="field"><label>作业标题</label><input v-model.trim="assignmentForm.title"></div>
+                  <div class="field"><label>截止时间</label><input type="datetime-local" v-model="assignmentForm.due_at"></div>
+                  <div class="field"><label>总分</label><input type="number" min="1" v-model="assignmentForm.total_score"></div>
+                  <div class="field"><label>作业要求</label><textarea v-model.trim="assignmentForm.requirement"></textarea></div>
+                  <div class="field"><label>标准答案文本</label><textarea v-model.trim="assignmentForm.answer_text" placeholder="可直接粘贴答案，AI 会用它批改"></textarea></div>
+                  <div class="field"><label>标准答案 PDF（可选）</label><input type="file" accept="application/pdf" @change="assignmentForm.answer_pdf = $event.target.files[0]">
+                  </div>
+                  <div class="actions"><button class="btn">发布作业</button></div>
+                </form>
+                <p class="muted" v-else style="margin-bottom:12px;">🔒 历史学期数据只读，无法发布新作业</p>
+                <div class="stack" style="margin-top:14px;">
+                  <article class="card" v-for="item in assignments" :key="item.id">
+                    <div class="section-head">
+                      <div>
+                        <div class="card-title">{{ item.title }}</div>
+                        <div class="muted">截止：{{ item.due_at || '未设置' }} · 已提交 {{ item.submission_count }} · 待复核 {{ item.pending_count }}</div>
+                      </div>
+                      <button class="btn secondary" @click="enterSubmissionView(item)">查看提交</button>
+                    </div>
+                    <p class="muted">{{ item.requirement || '暂无要求' }}</p>
+                  </article>
+                  <div class="empty" v-if="!assignments.length">暂无作业</div>
+                </div>
+              </section>
+
+              <section class="panel" v-if="activeTab === 'grades'">
+                <div class="section-head"><h2>成绩管理</h2></div>
+                <p class="muted" style="margin-bottom:12px;">教师在此录入期末成绩和总评成绩。作业平均分由系统根据学生提交自动计算。</p>
+                <form class="grid-3" @submit.prevent="saveGrade" v-if="!isReadonlySemester">
+                  <div class="field"><label>学生</label><select v-model="gradeForm.student_id"><option v-for="s in students" :key="s.user_id" :value="s.user_id">{{ s.name }} · {{ s.user_id }}</option></select></div>
+                  <div class="field"><label>类型</label><select v-model="gradeForm.source_type"><option value="final">期末成绩</option><option value="overall">总评成绩</option></select></div>
+                  <div class="field"><label>分数 (0-100)</label><input type="number" min="0" max="100" step="0.1" v-model.number="gradeForm.score"></div>
+                  <div class="field"><label>备注</label><input v-model.trim="gradeForm.comment"></div>
+                  <div class="actions"><button class="btn">保存成绩</button></div>
+                </form>
+                <p class="muted" v-else style="margin-bottom:12px;">🔒 历史学期数据只读，无法修改成绩</p>
+                <!-- 成绩汇总表 -->
+                <div v-if="gradeSummary.length" style="margin-top:18px;">
+                  <div class="section-head" style="cursor:pointer;" @click="gradeSummaryCollapsed = !gradeSummaryCollapsed">
+                    <h3>{{ gradeSummaryCollapsed ? '▶' : '▼' }} 成绩汇总（{{ gradeSummary.length }} 名学生）</h3>
+                    <button class="btn secondary" @click.stop="gradeSummaryCollapsed = !gradeSummaryCollapsed">{{ gradeSummaryCollapsed ? '展开' : '折叠' }}</button>
+                  </div>
+                  <div class="table-wrap" v-if="!gradeSummaryCollapsed">
+                    <table>
+                      <thead><tr><th>学生</th><th>学号</th><th>作业平均分</th><th>期末成绩</th><th>总评成绩</th></tr></thead>
+                      <tbody>
+                        <tr v-for="row in gradeSummary" :key="row.student_id">
+                          <td>{{ row.student_name }}</td>
+                          <td>{{ row.student_id }}</td>
+                          <td>{{ row.hw_avg !== null ? row.hw_avg + ' 分' : '-' }}</td>
+                          <td>{{ row.final !== null ? row.final + ' 分' : '-' }}</td>
+                          <td><span class="pill" v-if="row.overall !== null">{{ row.overall }} 分</span><span v-else class="muted">未录入</span></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <!-- 成绩 Agent -->
+                <div style="margin-top:18px; padding:16px; background:#f0f6ff; border:1px solid #c7d7f4; border-radius:8px;">
+                  <div style="font-weight:700; margin-bottom:8px; color:#1e3a8a;">🤖 成绩 Agent</div>
+                  <p class="muted" style="margin-bottom:10px;">向 AI 查询和管理本课程的学生成绩，例如：“哪些学生作业平均分低于 70？”、“帮我计算加权总评”。</p>
+                  <div class="grid-2" style="gap:10px;">
+                    <div class="field"><label>问题</label><input v-model.trim="gradeAgentQuestion" placeholder="例如：哪些学生不及格？平均分排名..." @keyup.enter="askGradeAgent"></div>
+                    <div class="actions" style="align-self:end;"><button class="btn" @click="askGradeAgent">查询</button></div>
+                  </div>
+                  <article class="card" v-if="gradeAgentAnswer" style="margin-top:10px; white-space:pre-wrap; line-height:1.7; font-size:14px;">{{ gradeAgentAnswer }}</article>
+                </div>
+                <grades-view :grades="grades"></grades-view>
+              </section>
+            </div>
+          </section>
+        </template>
+      </template>
+
+      <template v-if="user.user_type === 'admin'">
+        <template v-if="!adminCourseView">
+        <section class="panel" v-if="!isReadonlySemester">
+          <div class="section-head"><h2>课程管理</h2></div>
+          <div v-if="validationError" class="msg error" style="margin-bottom:12px;">{{ validationError }}</div>
+          <form class="grid-3" @submit.prevent="saveCourse">
+            <div class="field"><label class="required">课程编号</label><input v-model.trim="courseForm.code" placeholder="如 CLS001" @input="validationError=''"></div>
+            <div class="field"><label class="required">课程名称</label><input v-model.trim="courseForm.name" placeholder="如 软件工程" @input="validationError=''"></div>
+            <div class="field"><label class="required">授课教师</label><select v-model="courseForm.teacher_id" @change="validationError=''"><option value="">请选择</option><option v-for="t in teachers" :key="t.user_id" :value="t.user_id">{{ t.name }} · {{ t.user_id }}</option></select></div>
+            <div class="field"><label>上课时间 <span class="optional">选填</span></label><select v-model="courseForm.class_time"><option value="">未设置</option><option v-for="slot in timeSlots" :key="slot.slot_id" :value="slot.label">{{ slot.label }}</option></select></div>
+            <div class="field"><label>上课地点 <span class="optional">选填</span></label><select v-model="courseForm.location"><option value="">未设置</option><option v-for="room in classrooms" :key="room.classroom_id" :value="room.classroom_id">{{ room.classroom_id }}（{{ room.building }}）</option></select></div>
+            <div class="field"><label>学分 <span class="optional">选填</span></label><input type="number" step="0.5" v-model="courseForm.credits"></div>
+            <div class="field"><label>类型 <span class="optional">选填</span></label><select v-model="courseForm.course_type"><option>必修</option><option>选修</option></select></div>
+            <div class="field"><label>语言 <span class="optional">选填</span></label><select v-model="courseForm.language"><option>中文</option><option>英文</option></select></div>
+            <div class="field"><label>授课方式 <span class="optional">选填</span></label><select v-model="courseForm.teaching_method"><option>线下</option><option>线上</option><option>混合</option><option>实验</option></select></div>
+            <div class="field"><label>面向年级 <span class="optional">选填</span></label><input v-model.trim="courseForm.target_grade" placeholder="如 2024"></div>
+            <div class="field"><label>面向专业 <span class="optional">选填</span></label><input v-model.trim="courseForm.target_major" placeholder="如 软件工程"></div>
+            <div class="field"><label>课程说明 <span class="optional">选填</span></label><textarea v-model.trim="courseForm.description" placeholder="简短的课程介绍"></textarea></div>
+            <div class="actions"><button class="btn">{{ editingCourseId ? '保存修改' : '新增课程' }}</button><button type="button" class="btn secondary" @click="resetCourseForm">清空</button></div>
+          </form>
+        </section>
+        <section class="panel">
+          <div class="course-grid">
+            <article class="course-card" v-for="course in courses" :key="course.id">
+              <h3>{{ course.name }}</h3>
+              <p class="muted">{{ course.code }} · {{ course.teacher_name }}</p>
+              <div class="meta-grid">
+                <div class="meta"><span>时间</span>{{ course.class_time || '-' }}</div>
+                <div class="meta"><span>地点</span>{{ course.location || '-' }}</div>
+                <div class="meta"><span>学分</span>{{ course.credits }}</div>
+                <div class="meta"><span>属性</span>{{ course.course_type }} · {{ course.language }} · {{ course.teaching_method }}</div>
+              </div>
+              <div class="actions" style="margin-top:12px;"><button class="btn" @click="viewAdminCourse(course)">查看</button><button class="btn secondary" @click="editCourse(course)" :disabled="isReadonlySemester" :title="isReadonlySemester ? '历史学期只读' : ''">编辑</button><button class="btn danger" @click="deleteCourse(course)" :disabled="isReadonlySemester" :title="isReadonlySemester ? '历史学期只读' : ''">删除</button></div>
+            </article>
+          </div>
+        </section>
+        </template>
+
+        <!-- admin 课程详情视图 -->
+        <template v-if="adminCourseView">
+          <section class="panel">
+            <div class="section-head">
+              <div>
+                <h2>{{ selectedCourse.name }}</h2>
+                <p class="muted">{{ selectedCourse.code }} · {{ selectedCourse.teacher_name }}</p>
+              </div>
+              <button class="btn secondary" @click="exitAdminCourse">← 返回课程列表</button>
+            </div>
+          </section>
+
+          <!-- 课程基本信息 -->
+          <course-summary :course="selectedCourse"></course-summary>
+
+          <!-- 课程描述 -->
+          <section class="panel" v-if="selectedCourse.description">
+            <div class="section-head"><h2>课程说明</h2></div>
+            <p style="line-height:1.8; white-space:pre-wrap;">{{ selectedCourse.description }}</p>
+          </section>
+
+          <!-- 选课学生 -->
+          <section class="panel">
+            <div class="section-head">
+              <h2>选课学生</h2>
+              <span class="muted">共 {{ adminCourseStudents.length }} 人</span>
+            </div>
+            <div class="table-wrap" v-if="adminCourseStudents.length">
+              <table>
+                <thead><tr><th>学号</th><th>姓名</th><th>年级</th><th>专业</th><th>成绩</th></tr></thead>
+                <tbody>
+                  <tr v-for="s in adminCourseStudents" :key="s.student_id">
+                    <td>{{ s.student_id }}</td>
+                    <td>{{ s.student_name }}</td>
+                    <td>{{ s.grade || '-' }}</td>
+                    <td>{{ s.major || '-' }}</td>
+                    <td>{{ s.final_grade !== null && s.final_grade !== undefined ? s.final_grade : '未评分' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="empty" v-else>暂无选课学生</div>
+          </section>
+        </template>
+      </template>
+    </section>
+  </main>
+</div>
+
+<script>
+const { createApp } = Vue;
+
+const CourseSummary = {
+  props: ['course'],
+  template: `
+    <section class="panel">
+      <div class="section-head">
+        <div>
+          <h2>{{ course.name }}</h2>
+          <p class="muted">{{ course.code }} · {{ course.description || '暂无课程说明' }}</p>
+        </div>
+        <div class="actions"><span class="pill blue">{{ course.course_type }}</span><span class="pill">{{ course.credits }} 学分</span></div>
+      </div>
+      <div class="meta-grid">
+        <div class="meta"><span>上课时间</span>{{ course.class_time || '-' }}</div>
+        <div class="meta"><span>地点</span>{{ course.location || '-' }}</div>
+        <div class="meta"><span>授课教师</span>{{ course.teacher_name }}</div>
+        <div class="meta"><span>授课方式</span>{{ course.teaching_method }}</div>
+        <div class="meta"><span>授课语言</span>{{ course.language }}</div>
+        <div class="meta"><span>面向对象</span>{{ course.target_grade || '不限' }} · {{ course.target_major || '不限' }}</div>
+      </div>
+    </section>`
+};
+
+const AnnouncementsView = {
+  props: ['announcements'],
+  template: `
+    <section class="panel">
+      <div class="section-head"><h2>课堂公告</h2></div>
+      <div class="stack">
+        <article class="card" v-for="item in announcements" :key="item.id">
+          <div class="card-title">{{ item.title }}</div>
+          <div class="muted">{{ item.created_at }} · {{ item.created_by }}</div>
+          <p style="margin-top:8px; line-height:1.7;">{{ item.content }}</p>
+        </article>
+        <div class="empty" v-if="!announcements.length">暂无公告</div>
+      </div>
+    </section>`
+};
+
+const StudentAssignments = {
+  props: ['assignments', 'files', 'readonly'],
+  emits: ['submit'],
+  template: `
+    <section class="panel">
+      <div class="section-head"><h2>作业提交</h2></div>
+      <p class="muted" v-if="readonly" style="margin-bottom:12px;">🔒 历史学期数据只读，无法提交作业</p>
+      <div class="stack">
+        <article class="card" v-for="item in assignments" :key="item.id">
+          <div class="section-head">
+            <div>
+              <div class="card-title">{{ item.title }}</div>
+              <div class="muted">截止：{{ item.due_at || '未设置' }} · 总分 {{ item.total_score }}</div>
+            </div>
+            <span class="pill" v-if="item.submission">{{ item.submission.review_status }}</span>
+          </div>
+          <p class="muted">{{ item.requirement || '暂无要求' }}</p>
+          <div class="grid-2" style="margin-top:12px;">
+            <div class="field"><label>提交 PDF（可选）</label><input type="file" accept="application/pdf" @change="files[item.id] = $event.target.files[0]" :disabled="readonly"></div>
+            <div class="field"><label>答案文本（可直接粘贴，便于 AI 批改）</label><textarea v-model="item.answerDraft" :disabled="readonly"></textarea></div>
+          </div>
+          <div class="actions" style="margin-top:10px;">
+            <button class="btn success" @click="$emit('submit', item)" v-if="!readonly">提交并 AI 初评</button>
+            <span class="pill" v-if="item.submission">AI {{ item.submission.ai_score }} 分</span>
+            <span class="pill blue" v-if="item.submission && item.submission.teacher_score !== null">教师 {{ item.submission.teacher_score }} 分</span>
+          </div>
+          <p class="muted" v-if="item.submission" style="margin-top:8px;">{{ item.submission.ai_feedback }}</p>
+        </article>
+        <div class="empty" v-if="!assignments.length">暂无作业</div>
+      </div>
+    </section>`
+};
+
+const GradesView = {
+  props: ['grades'],
+  methods: {
+    gradeType(type) {
+      return { final: '期末成绩', overall: '总评成绩', quiz: '小测', course: '课程得分', assignment: '作业' }[type] || type;
+    }
+  },
+  template: `
+    <section class="panel">
+      <div class="section-head"><h2>成绩记录</h2></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>课程</th><th>学生</th><th>类型</th><th>作业/说明</th><th>分数</th><th>备注</th><th>更新时间</th></tr></thead>
+          <tbody>
+            <tr v-for="g in grades" :key="g.id">
+              <td>{{ g.course_name }}</td>
+              <td>{{ g.student_id }}</td>
+              <td>{{ gradeType(g.source_type) }}</td>
+              <td>{{ g.assignment_title || g.comment || '-' }}</td>
+              <td><span class="pill">{{ g.score }} 分</span></td>
+              <td>{{ g.comment }}</td>
+              <td>{{ g.updated_at }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="empty" v-if="!grades.length" style="margin-top:10px;">暂无成绩</div>
+    </section>`
+};
+
+const CourseGradeSheet = {
+  props: ['course', 'grades'],
+  computed: {
+    groups() {
+      const labels = { assignment: '书面作业', quiz: '随堂测验', overall: '总评成绩', final: '期末成绩' };
+      const order = ['assignment', 'quiz', 'final', 'overall'];
+      return order
+        .map(type => {
+          const items = this.grades.filter(g => g.source_type === type);
+          if (!items.length) return null;
+          const avg = items.reduce((sum, item) => sum + Number(item.score || 0), 0) / items.length;
+          return { type, label: labels[type], items, score: avg, max: 100, percent: avg };
+        })
+        .filter(Boolean);
+    },
+    totalScore() {
+      const source = this.grades.length ? this.grades : [];
+      if (!source.length) return 0;
+      // 优先显示教师提交的总评成绩，其次期末成绩，最后才用平均分
+      const overall = source.find(g => g.source_type === 'overall');
+      if (overall) return Number(overall.score || 0);
+      const final = source.find(g => g.source_type === 'final');
+      if (final) return Number(final.score || 0);
+      return source.reduce((sum, item) => sum + Number(item.score || 0), 0) / source.length;
+    }
+  },
+  methods: {
+    itemName(item, index) {
+      const labels = { assignment: '书面作业', quiz: '随堂测验', course: '课程得分' };
+      return item.comment || `${labels[item.source_type] || '成绩项'}${index + 1}`;
+    },
+    fmt(value) {
+      return Number(value || 0).toFixed(2);
+    }
+  },
+  template: `
+    <section class="grade-sheet">
+      <div class="grade-title">▣ 成绩单 · {{ course.name }}</div>
+      <div class="table-wrap" style="border:0; border-radius:0;">
+        <table class="grade-table">
+          <thead><tr><th>成绩项</th><th>分数</th><th>百分比</th></tr></thead>
+          <tbody>
+            <template v-for="group in groups" :key="group.type">
+              <tr class="group-row">
+                <td>{{ group.label }}</td>
+                <td>{{ fmt(group.score) }} / {{ group.max }}</td>
+                <td>{{ fmt(group.percent) }}%</td>
+              </tr>
+              <tr class="child-row" v-for="(item, index) in group.items" :key="item.id">
+                <td>{{ itemName(item, index) }}</td>
+                <td>{{ fmt(item.score) }} / 100</td>
+                <td>{{ fmt(item.score) }}%</td>
+              </tr>
+            </template>
+            <tr class="total-row" v-if="grades.length">
+              <td>总分</td>
+              <td>{{ fmt(totalScore) }} / 100</td>
+              <td>{{ fmt(totalScore) }}%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="empty" v-if="!grades.length" style="margin:14px;">暂无成绩</div>
+    </section>`
+};
+
+const OverallGradesView = {
+  props: ['grades', 'user'],
+  emits: ['detail'],
+  data() {
+    return { semester: '', keyword: '', teacher: '', section: 'major' };
+  },
+  computed: {
+    rows() {
+      const byCourse = new Map();
+      this.grades.forEach(item => {
+        const key = item.course_id;
+        if (!byCourse.has(key)) byCourse.set(key, { ...item, _scores: [], _overall: null, _final: null });
+        const row = byCourse.get(key);
+        row._scores.push(Number(item.score || 0));
+        if (item.source_type === 'overall') row._overall = item.score;
+        if (item.source_type === 'final') row._final = item.score;
+      });
+      return [...byCourse.values()].map(row => {
+        // 优先显示教师提交的总评成绩，其次期末成绩，最后才用平均分
+        if (row._overall !== null) {
+          row.score = row._overall;
+        } else if (row._final !== null) {
+          row.score = row._final;
+        } else if (row._scores.length > 0) {
+          row.score = row._scores.reduce((sum, value) => sum + value, 0) / row._scores.length;
+        }
+        return row;
+      });
+    },
+    filtered() {
+      return this.rows.filter(item => {
+        const keywordOk = !this.keyword || `${item.course_name} ${item.course_code}`.includes(this.keyword);
+        const semesterOk = !this.semester || item.semester === this.semester;
+        const teacherOk = !this.teacher || (item.teacher_name || '').includes(this.teacher);
+        return keywordOk && semesterOk && teacherOk;
+      });
+    },
+    semesters() {
+      return [...new Set(this.grades.map(item => item.semester).filter(Boolean))];
+    },
+    totalCredits() {
+      return this.rows.reduce((sum, item) => sum + Number(item.credits || 0), 0).toFixed(1);
+    },
+    averageScore() {
+      if (!this.rows.length) return '-';
+      return (this.rows.reduce((sum, item) => sum + Number(item.score || 0), 0) / this.rows.length).toFixed(1);
+    }
+  },
+  methods: {
+    displayScore(score) {
+      const n = Number(score || 0);
+      if (n >= 90) return 'A';
+      if (n >= 85) return 'A-';
+      if (n >= 80) return 'B+';
+      return String(n);
+    }
+  },
+  template: `
+    <section class="affairs-shell">
+      <aside class="affairs-side">
+        <div class="affairs-user">Welcome，<strong>{{ user.name }}</strong></div>
+        <div class="affairs-menu">
+          <button :class="{ active: section === 'major' }" @click="section='major'">主修成绩</button>
+          <button :class="{ active: section === 'transcript' }" @click="section='transcript'">电子成绩单</button>
+        </div>
+      </aside>
+      <div class="affairs-main" v-if="section === 'major'">
+        <div class="affairs-top">成绩查询</div>
+        <div class="affairs-filters">
+          <div class="field"><label>学年学期</label><select v-model="semester"><option value="">请选择学期</option><option v-for="term in semesters" :key="term">{{ term }}</option></select></div>
+          <div class="field"><label>课程名</label><input v-model.trim="keyword"></div>
+          <div class="field"><label>上课教师</label><input v-model.trim="teacher"></div>
+          <button class="btn success" type="button">查询</button>
+        </div>
+        <div class="table-wrap" style="border:0; border-radius:0;">
+          <table>
+            <thead><tr><th>序号</th><th>学年</th><th>课程</th><th>学分</th><th>成绩</th><th>加分成绩</th><th>上课教师</th><th>详细信息</th></tr></thead>
+            <tbody>
+              <tr v-for="(item, index) in filtered" :key="item.id">
+                <td>{{ index + 1 }}</td>
+                <td>{{ item.semester }}</td>
+                <td>{{ item.course_code }} {{ item.course_name }}</td>
+                <td>{{ item.credits }}</td>
+                <td>{{ displayScore(item.score) }}</td>
+                <td>-</td>
+                <td>{{ item.teacher_name }}</td>
+                <td><button class="detail-btn" @click="$emit('detail', item)">详情</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="affairs-main" v-else-if="section === 'transcript'">
+        <div class="affairs-top">电子成绩单</div>
+        <div class="transcript-summary">
+          <div class="stat"><span class="muted">课程门数</span><strong>{{ rows.length }}</strong></div>
+          <div class="stat"><span class="muted">累计学分</span><strong>{{ totalCredits }}</strong></div>
+          <div class="stat"><span class="muted">平均成绩</span><strong>{{ averageScore }}</strong></div>
+        </div>
+        <div class="table-wrap" style="border:0; border-radius:0;">
+          <table>
+            <thead><tr><th>课程</th><th>学分</th><th>成绩</th><th>上课教师</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr v-for="item in rows" :key="item.course_id">
+                <td>{{ item.course_code }} {{ item.course_name }}</td>
+                <td>{{ item.credits }}</td>
+                <td>{{ displayScore(item.score) }}</td>
+                <td>{{ item.teacher_name }}</td>
+                <td><button class="detail-btn" @click="$emit('detail', item)">查看分项</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>`
+};
+
+createApp({
+  components: { CourseSummary, AnnouncementsView, StudentAssignments, GradesView, CourseGradeSheet, OverallGradesView },
+  data() {
+    return {
+      token: localStorage.getItem('classroom_token') || '',
+      user: {},
+      toast: '',
+      courses: [],
+      teachers: [],
+      students: [],
+      ddls: [],
+      teacherDashboard: {},
+      selectedCourseId: null,
+      activeTab: 'announcements',
+      announcements: [],
+      assignments: [],
+      submissions: [],
+      grades: [],
+      allGrades: [],
+      selectedDdl: null,
+      aiStatus: {},
+      filters: { keyword: '', course_type: '', language: '', teaching_method: '' },
+      submissionFiles: {},
+      reviewDrafts: {},
+      selectedAssignmentId: null,
+      submissionView: false,
+      submissionViewAssignment: {},
+      studentCourseView: false,
+      studentMainTab: 'courses',
+      teacherCourseView: false,
+      teacherMainTab: 'courses',
+      gradingAssignments: [],
+      submissionViewFromGrading: false,
+      editingCourseId: null,
+      courseForm: { code: '', name: '', teacher_id: '', class_time: '', location: '', credits: 2, course_type: '必修', language: '中文', teaching_method: '线下', target_grade: '', target_major: '', description: '' },
+      validationError: '',
+      timeSlots: [],
+      classrooms: [],
+      announcementForm: { title: '', content: '' },
+      assignmentForm: { title: '', due_at: '', total_score: 100, requirement: '', answer_text: '', answer_pdf: null },
+      gradeForm: { student_id: '', source_type: 'final', score: '', comment: '' },
+      gradeSummary: [],
+      gradeSummaryCollapsed: false,
+      gradeAgentQuestion: '',
+      gradeAgentAnswer: '',
+      ddlKeyword: '',
+      ddlForm: { title: '', due_at: '', course_id: '' },
+      agentQuestion: '',
+      agentAnswer: '',
+      adminCourseView: false,
+      adminCourseStudents: [],
+      currentSemester: '',
+      activeSemester: '',
+      availableSemesters: []
+    };
+  },
+  computed: {
+    roleLabel() {
+      return { student: '学生端', teacher: '教师端', admin: '管理端' }[this.user.user_type] || '';
+    },
+    allAssignmentsForGrading() {
+      return this.gradingAssignments;
+    },
+    filteredDdls() {
+      if (!this.ddlKeyword) return this.ddls;
+      const kw = this.ddlKeyword.toLowerCase();
+      return this.ddls.filter(item => {
+        const titleMatch = (item.title || '').toLowerCase().includes(kw);
+        const courseMatch = (item.course_name || '').toLowerCase().includes(kw);
+        return titleMatch || courseMatch;
+      });
+    },
+    selectedCourse() {
+      return this.courses.find(c => c.id === this.selectedCourseId);
+    },
+    isReadonlySemester() {
+      return this.currentSemester && this.activeSemester && this.currentSemester !== this.activeSemester;
+    },
+    currentAssignmentTitle() {
+      const item = this.assignments.find(a => a.id === this.selectedAssignmentId);
+      return item ? item.title : '未选择作业';
+    }
+  },
+  watch: {
+    teacherMainTab(val) {
+      if (val === 'grading' && this.courses.length) this.loadGradingAssignments();
+    }
+  },
+  async mounted() {
+    // 无 token 时直接跳转到大厅
+    const urlToken = new URLSearchParams(window.location.search).get('token');
+    if (urlToken) {
+      try {
+        const res = await fetch('/api/sso-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: urlToken })
+        });
+        const data = await res.json();
+        if (data.success) {
+          this.token = data.token;
+          this.user = data.user;
+          localStorage.setItem('classroom_token', this.token);
+          const cleanUrl = window.location.pathname;
+          window.history.replaceState({}, '', cleanUrl);
+          await this.loadSemesters();
+          await this.loadAll();
+          return;
+        }
+      } catch (e) {
+        console.error('SSO login failed:', e);
+      }
+      // SSO 失败，跳转到大厅
+      window.location.href = location.origin.replace(location.port, '5001');
+      return;
+    }
+    if (this.token) {
+      await this.loadMe();
+    } else {
+      // 无 token，跳转到大厅
+      window.location.href = location.origin.replace(location.port, '5001');
+    }
+  },
+  methods: {
+    headers(extra = {}) { return { ...extra, Authorization: `Bearer ${this.token}` }; },
+    async api(path, options = {}) {
+      const res = await fetch(path, { ...options, headers: this.headers(options.headers || {}) });
+      const data = await res.json();
+      if (!res.ok || data.success === false) throw new Error(data.message || '请求失败');
+      return data.data;
+    },
+
+    async loadMe() {
+      try {
+        this.user = await this.api('/api/me');
+        await this.loadSemesters();
+        await this.loadAll();
+      } catch (err) {
+        this.logout();
+      }
+    },
+    logout() {
+      localStorage.removeItem('classroom_token');
+      this.token = '';
+      this.user = {};
+      window.location.href = location.origin.replace(location.port, '5001');
+    },
+    async loadAll() {
+      if (this.user.user_type === 'admin') {
+        await Promise.all([this.loadTeachers(), this.loadCourses(), this.loadTimeSlots(), this.loadClassrooms()]);
+      } else if (this.user.user_type === 'teacher') {
+        await Promise.all([this.loadTeacherDashboard(), this.loadCourses(), this.loadStudents(), this.loadDdls(), this.loadAiStatus()]);
+      } else {
+        await Promise.all([this.loadCourses(), this.loadDdls(), this.loadAllGrades()]);
+      }
+    },
+    async loadSemesters() {
+      try {
+        this.availableSemesters = await this.api('/api/semesters');
+        const current = await this.api('/api/semesters/current');
+        this.activeSemester = current.semester || this.availableSemesters[0] || '';
+        if (!this.currentSemester) {
+          this.currentSemester = this.activeSemester;
+        }
+      } catch (e) {
+        this.availableSemesters = [];
+        this.activeSemester = '';
+      }
+    },
+    onSemesterChange() {
+      // 切换学期后重新加载所有数据
+      this.selectedCourseId = null;
+      this.adminCourseView = false;
+      this.studentCourseView = false;
+      this.teacherCourseView = false;
+      this.loadAll();
+    },
+    async loadTeacherDashboard() {
+      this.teacherDashboard = await this.api(`/api/teacher/dashboard?semester=${encodeURIComponent(this.currentSemester)}`);
+    },
+    async loadAiStatus() {
+      if (this.user.user_type === 'teacher' || this.user.user_type === 'admin') {
+        this.aiStatus = await this.api('/api/ai/status');
+      }
+    },
+    queryString() {
+      const params = new URLSearchParams();
+      Object.entries(this.filters).forEach(([key, value]) => { if (value) params.set(key, value); });
+      const str = params.toString();
+      return str ? `?${str}` : '';
+    },
+    async loadCourses() {
+      const semParam = `semester=${encodeURIComponent(this.currentSemester)}`;
+      const qs = this.user.user_type === 'student' ? this.queryString() : '';
+      const sep = qs ? '&' : '?';
+      this.courses = await this.api(`/api/courses${qs ? qs + '&' + semParam : '?' + semParam}`);
+      if (!this.selectedCourseId && this.courses.length) this.selectedCourseId = this.courses[0].id;
+      if (this.selectedCourseId && !this.courses.find(c => c.id === this.selectedCourseId)) {
+        this.selectedCourseId = this.courses[0] ? this.courses[0].id : null;
+      }
+      if (this.selectedCourseId && this.user.user_type !== 'admin') await this.loadCourseData();
+    },
+    clearFilters() {
+      this.filters = { keyword: '', course_type: '', language: '', teaching_method: '' };
+      this.loadCourses();
+    },
+    async loadTeachers() { this.teachers = await this.api('/api/teachers'); },
+    async loadTimeSlots() {
+      try { this.timeSlots = await this.api('/api/time-slots'); } catch(e) { this.timeSlots = []; }
+    },
+    async loadClassrooms() {
+      try { this.classrooms = await this.api('/api/classrooms'); } catch(e) { this.classrooms = []; }
+    },
+    async loadStudents() {
+      this.students = await this.api('/api/students');
+      if (!this.gradeForm.student_id && this.students[0]) this.gradeForm.student_id = this.students[0].user_id;
+    },
+    async loadDdls() {
+      this.ddls = await this.api(`/api/ddls?semester=${encodeURIComponent(this.currentSemester)}`);
+      if (!this.selectedDdl && this.ddls.length) this.selectedDdl = this.ddls[0];
+    },
+    async loadAllGrades() {
+      this.allGrades = await this.api(`/api/grades?semester=${encodeURIComponent(this.currentSemester)}`);
+    },
+    selectDdl(item) {
+      this.selectedDdl = item;
+      this.activeTab = 'ddl';
+    },
+    async createDdl() {
+      await this.api('/api/ddls', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: this.ddlForm.title,
+          due_at: this.ddlForm.due_at,
+          course_id: this.ddlForm.course_id || null
+        })
+      });
+      this.ddlForm = { title: '', due_at: '', course_id: '' };
+      this.selectedDdl = null;
+      await this.loadDdls();
+      this.show('DDL 已添加');
+    },
+    async deleteDdl(item) {
+      if (item.readonly) return this.show('作业自动生成的 DDL 不能删除');
+      if (!confirm(`确认删除 DDL“${item.title}”？`)) return;
+      await this.api(`/api/ddls/${item.id}`, { method: 'DELETE' });
+      if (this.selectedDdl && this.selectedDdl.id === item.id) this.selectedDdl = null;
+      await this.loadDdls();
+      this.show('DDL 已删除');
+    },
+    async openStudentCourse(course, tab) {
+      this.selectedCourseId = course.id;
+      this.activeTab = tab;
+      await this.loadCourseData();
+      this.studentCourseView = true;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+    exitStudentCourse() {
+      this.studentCourseView = false;
+      this.studentMainTab = 'courses';
+    },
+    async switchStudentCourse(course) {
+      this.selectedCourseId = course.id;
+      await this.loadCourseData();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+    async handleGradeDetail(row) {
+      const course = this.courses.find(item => item.id === row.course_id);
+      if (!course) {
+        this.show('当前筛选结果中找不到该课程');
+        return;
+      }
+      this.selectedCourseId = row.course_id;
+      this.activeTab = 'grades';
+      await this.loadCourseData();
+      this.studentCourseView = true;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+    async selectCourse(id) {
+      this.selectedCourseId = id;
+      this.submissions = [];
+      this.selectedAssignmentId = null;
+      await this.loadCourseData();
+    },
+    async loadCourseData() {
+      if (!this.selectedCourseId) return;
+      await Promise.all([this.loadAnnouncements(), this.loadAssignments(), this.loadGrades(), this.loadGradeSummary()]);
+    },
+    async loadAnnouncements() { this.announcements = await this.api(`/api/courses/${this.selectedCourseId}/announcements?semester=${encodeURIComponent(this.currentSemester)}`); },
+    async loadCourseStudents() {
+      try { this.adminCourseStudents = await this.api(`/api/courses/${this.selectedCourseId}/students?semester=${encodeURIComponent(this.currentSemester)}`); } catch(e) { this.adminCourseStudents = []; }
+    },
+    async viewAdminCourse(course) {
+      this.selectedCourseId = course.id;
+      this.adminCourseView = true;
+      await Promise.all([this.loadAnnouncements(), this.loadCourseStudents()]);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+    exitAdminCourse() {
+      this.adminCourseView = false;
+      this.adminCourseStudents = [];
+    },
+    async loadAssignments() {
+      this.assignments = await this.api(`/api/courses/${this.selectedCourseId}/assignments?semester=${encodeURIComponent(this.currentSemester)}`);
+      this.assignments.forEach(item => { if (!item.answerDraft) item.answerDraft = ''; });
+    },
+    async loadGrades() { this.grades = await this.api(`/api/courses/${this.selectedCourseId}/grades?semester=${encodeURIComponent(this.currentSemester)}`); },
+    async loadGradeSummary() {
+      try { this.gradeSummary = await this.api(`/api/courses/${this.selectedCourseId}/grade-summary?semester=${encodeURIComponent(this.currentSemester)}`); } catch(e) { this.gradeSummary = []; }
+    },
+    async saveCourse() {
+      // 校验必填项
+      if (!this.courseForm.code.trim()) { this.validationError = '请输入课程编号'; return; }
+      if (!this.courseForm.name.trim()) { this.validationError = '请输入课程名称'; return; }
+      if (!this.courseForm.teacher_id) { this.validationError = '请选择授课教师'; return; }
+      this.validationError = '';
+      try {
+        const method = this.editingCourseId ? 'PUT' : 'POST';
+        const url = this.editingCourseId ? `/api/courses/${this.editingCourseId}` : '/api/courses';
+        await this.api(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(this.courseForm) });
+        this.resetCourseForm();
+        await this.loadCourses();
+        this.show('课程已保存');
+      } catch (e) {
+        this.validationError = e.message || '保存失败，请重试';
+      }
+    },
+    editCourse(course) {
+      this.editingCourseId = course.id;
+      this.courseForm = { ...course };
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+    resetCourseForm() {
+      this.editingCourseId = null;
+      this.validationError = '';
+      this.courseForm = { code: '', name: '', teacher_id: '', class_time: '', location: '', credits: 2, course_type: '必修', language: '中文', teaching_method: '线下', target_grade: '', target_major: '', description: '' };
+    },
+    async deleteCourse(course) {
+      if (!confirm(`确认删除课程“${course.name}”？`)) return;
+      await this.api(`/api/courses/${course.id}`, { method: 'DELETE' });
+      await this.loadCourses();
+      this.show('课程已删除');
+    },
+    async createAnnouncement() {
+      await this.api(`/api/courses/${this.selectedCourseId}/announcements`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(this.announcementForm) });
+      this.announcementForm = { title: '', content: '' };
+      await this.loadAnnouncements();
+      this.show('公告已发布');
+    },
+    async createAssignment() {
+      const form = new FormData();
+      Object.entries(this.assignmentForm).forEach(([key, value]) => { if (value) form.append(key, value); });
+      await this.api(`/api/courses/${this.selectedCourseId}/assignments`, { method: 'POST', headers: {}, body: form });
+      this.assignmentForm = { title: '', due_at: '', total_score: 100, requirement: '', answer_text: '', answer_pdf: null };
+      await Promise.all([this.loadAssignments(), this.loadDdls(), this.loadTeacherDashboard()]);
+      this.show('作业已发布');
+    },
+    async submitAssignment(item) {
+      const form = new FormData();
+      const file = this.submissionFiles[item.id];
+      if (file) form.append('pdf', file);
+      if (item.answerDraft) form.append('answer_text', item.answerDraft);
+      await this.api(`/api/assignments/${item.id}/submit`, { method: 'POST', headers: {}, body: form });
+      await Promise.all([this.loadAssignments(), this.loadGrades(), this.loadAllGrades()]);
+      this.show('已提交，AI 初评完成');
+    },
+    async loadSubmissions(item) {
+      this.selectedAssignmentId = item.id;
+      this.submissions = await this.api(`/api/assignments/${item.id}/submissions`);
+      this.reviewDrafts = {};
+      this.submissions.forEach(sub => {
+        this.reviewDrafts[sub.id] = { teacher_score: sub.teacher_score ?? sub.ai_score ?? '', teacher_feedback: sub.teacher_feedback || '', review_status: '已通过' };
+      });
+    },
+    async enterSubmissionView(item) {
+      this.submissionViewAssignment = item;
+      await this.loadSubmissions(item);
+      this.submissionView = true;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+    exitSubmissionView() {
+      this.submissionView = false;
+      this.submissions = [];
+      this.submissionViewAssignment = {};
+      // 返回教师课程详情而不是主页面
+      if (this.user.user_type === 'teacher') {
+        if (this.submissionViewFromGrading) {
+          this.teacherCourseView = false;
+          this.teacherMainTab = 'grading';
+          this.submissionViewFromGrading = false;
+          this.loadGradingAssignments();
+        } else {
+          this.teacherCourseView = true;
+        }
+      }
+    },
+    enterTeacherCourse(course) {
+      this.selectedCourseId = course.id;
+      this.activeTab = 'announcements';
+      this.loadCourseData();
+      this.teacherCourseView = true;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+    exitTeacherCourse() {
+      this.teacherCourseView = false;
+      this.teacherMainTab = 'courses';
+    },
+    async switchTeacherCourse(course) {
+      this.selectedCourseId = course.id;
+      await this.loadCourseData();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+    enterSubmissionViewForGrading(item) {
+      this.submissionViewFromGrading = true;
+      this.selectedCourseId = item._course_id;
+      this.activeTab = 'assignments';
+      this.loadCourseData().then(() => {
+        const found = this.assignments.find(a => a.id === item.id);
+        if (found) this.enterSubmissionView(found);
+      });
+    },
+    async loadGradingAssignments() {
+      const result = [];
+      for (const course of this.courses) {
+        try {
+          const resp = await this.api(`/api/courses/${course.id}/assignments?semester=${encodeURIComponent(this.currentSemester)}`);
+          const items = resp.data || resp;
+          for (const item of (Array.isArray(items) ? items : [])) {
+            if (item.pending_count > 0 || item.submission_count > 0) {
+              result.push({ ...item, _course_id: course.id, _course_name: course.name, _key: `${course.id}-${item.id}` });
+            }
+          }
+        } catch (e) { /* skip */ }
+      }
+      this.gradingAssignments = result;
+    },
+    async regrade(sub) {
+      await this.api(`/api/submissions/${sub.id}/ai-grade`, { method: 'POST' });
+      if (this.submissionViewAssignment.id) {
+        await this.loadSubmissions(this.submissionViewAssignment);
+      } else {
+        const assignment = this.assignments.find(a => a.id === this.selectedAssignmentId);
+        if (assignment) await this.loadSubmissions(assignment);
+      }
+      this.show('AI 已重新批改');
+    },
+    async reviewSubmission(sub) {
+      const draft = this.reviewDrafts[sub.id];
+      if (draft && draft.teacher_score !== '' && draft.teacher_score !== null) {
+        const score = Number(draft.teacher_score);
+        if (isNaN(score) || score < 0 || score > 100) { this.show('教师评分须在 0-100 之间'); return; }
+      }
+      await this.api(`/api/submissions/${sub.id}/review`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(this.reviewDrafts[sub.id]) });
+      if (this.submissionViewAssignment.id) {
+        await this.loadSubmissions(this.submissionViewAssignment);
+      } else {
+        const assignment = this.assignments.find(a => a.id === this.selectedAssignmentId);
+        if (assignment) await this.loadSubmissions(assignment);
+      }
+      await Promise.all([this.loadGrades(), this.loadTeacherDashboard()]);
+      this.show('已批准，学生成绩已更新');
+    },
+    async saveGrade() {
+      const score = Number(this.gradeForm.score);
+      if (isNaN(score) || score < 0 || score > 100) { this.show('分数须在 0-100 之间'); return; }
+      await this.api(`/api/courses/${this.selectedCourseId}/grades`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(this.gradeForm) });
+      this.gradeForm.score = '';
+      this.gradeForm.comment = '';
+      await Promise.all([this.loadGrades(), this.loadGradeSummary()]);
+      this.show('成绩已保存');
+    },
+    async askAgent() {
+      const data = await this.api('/api/agent/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: this.agentQuestion }) });
+      this.agentAnswer = data.answer;
+    },
+    async askQuickAgent() {
+      this.activeTab = 'agent';
+      this.agentQuestion = '请概览我现在负责几门课、待复核作业、平均分和不及格情况。';
+      await this.askAgent();
+    },
+    async askGradeAgent() {
+      if (!this.gradeAgentQuestion) return;
+      const ctx = `当前课程: ${this.selectedCourse?.name} (${this.selectedCourse?.code})\n成绩汇总数据:\n${JSON.stringify(this.gradeSummary.map(r => ({name: r.student_name, id: r.student_id, hw_avg: r.hw_avg, final: r.final, overall: r.overall})))}\n成绩记录:\n${JSON.stringify(this.grades.map(g => ({student: g.student_id, type: g.source_type, title: g.assignment_title, score: g.score})))}`;
+      const question = `${ctx}\n\n教师的问题: ${this.gradeAgentQuestion}`;
+      try {
+        const data = await this.api('/api/agent/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question }) });
+        this.gradeAgentAnswer = data.answer;
+      } catch (e) { this.gradeAgentAnswer = '查询失败: ' + e.message; }
+    },
+    show(message) {
+      this.toast = message;
+      clearTimeout(this.toastTimer);
+      this.toastTimer = setTimeout(() => this.toast = '', 2200);
+    }
+  }
+}).mount('#app');
+</script>
+</body>
+</html>
