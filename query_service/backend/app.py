@@ -32,7 +32,7 @@ CORS(app)
 
 # ============ 数据库配置 ============
 
-DB_HOST = os.getenv("DB_HOST", "47.93.226.110")
+DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
 DB_PORT = int(os.getenv("DB_PORT", "3306"))
 DB_USER = os.getenv("DB_USER", "root")
 DB_PASS = os.getenv("DB_PASS", "")
@@ -1122,6 +1122,9 @@ def log_audit_operation(user_type, sql):
 
 def call_deepseek_api(messages):
     """调用 DeepSeek API"""
+    if not DEEPSEEK_API_KEY:
+        return None, "未配置 DEEPSEEK_API_KEY 环境变量"
+
     payload = json.dumps({
         "model": "deepseek-chat",
         "messages": messages,

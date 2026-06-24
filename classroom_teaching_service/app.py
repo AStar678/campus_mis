@@ -47,7 +47,7 @@ FRONTEND_DIR = Path(os.environ.get("FRONTEND_DIR", BASE_DIR / "frontend"))
 
 # ─── Cloud MySQL Configuration ───────────────────────────────────────────────
 
-DB_HOST = os.environ.get("DB_HOST", "47.93.226.110")
+DB_HOST = os.environ.get("DB_HOST", "127.0.0.1")
 DB_PORT = os.environ.get("DB_PORT", "3306")
 DB_USER = os.environ.get("DB_USER", "root")
 DB_PASS = os.environ.get("DB_PASS", "")

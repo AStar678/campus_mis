@@ -163,10 +163,10 @@ http://<host>:5005/?token=<token>
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `DB_HOST` | `47.93.226.110` | MySQL 地址 |
+| `DB_HOST` | `127.0.0.1` | MySQL 地址 |
 | `DB_PORT` | `3306` | MySQL 端口 |
 | `DB_USER` | `root` | MySQL 用户名 |
-| `DB_PASS` | `` | URL 编码后的 MySQL 密码 |
+| `DB_PASS` | 空 | URL 编码后的 MySQL 密码，通过环境变量配置 |
 | `DB_PASS_RAW` | 从 `DB_PASS` 解码 | 原始 MySQL 密码，优先用于连接数据库 |
 | `WALL_DB_NAME` | `campus_wall_database` | 校园墙数据库名 |
 | `MAIN_SERVICE_URL` | `http://127.0.0.1:5001` | 主服务地址 |

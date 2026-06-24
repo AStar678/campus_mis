@@ -13,7 +13,7 @@
   python3 reset_db.py --restore backups/reset_20260617_120000  # 从备份恢复
 
 连接信息：
-  主机: 47.93.226.110:3306
+  主机: 通过 DB_HOST/DB_PORT 环境变量配置，默认 127.0.0.1:3306
   用户: root
 """
 
@@ -26,10 +26,10 @@ from datetime import datetime
 import pymysql
 
 # ─── 数据库连接配置 ───────────────────────────────────────────────
-DB_HOST = "47.93.226.110"
-DB_PORT = 3306
+DB_HOST = os.environ.get("DB_HOST", "127.0.0.1")
+DB_PORT = int(os.environ.get("DB_PORT", "3306"))
 DB_USER = "root"
-DB_PASS = ""
+DB_PASS = os.environ.get("DB_PASS_RAW", os.environ.get("DB_PASS", ""))
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 BACKUP_ROOT = os.path.join(SCRIPT_DIR, "backups")

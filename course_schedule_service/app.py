@@ -30,7 +30,7 @@ CORS(app)
 #
 # 默认绑定：course_schedule_database，由本服务独立维护。
 # main 绑定：main_database，只读访问主服务维护的校园公共数据。
-DB_HOST = os.getenv("DB_HOST", "47.93.226.110")
+DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
 DB_PORT = int(os.getenv("DB_PORT", "3306"))
 DB_USER = os.getenv("DB_USER", "root")
 DB_PASS = os.getenv("DB_PASS", "")

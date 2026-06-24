@@ -13,10 +13,10 @@ app = Flask(__name__, static_folder=FRONTEND_DIR, static_url_path='')
 CORS(app)
 
 # ============ 配置 ============
-DB_HOST = os.environ.get('DB_HOST', '47.93.226.110')
+DB_HOST = os.environ.get('DB_HOST', '127.0.0.1')
 DB_PORT = int(os.environ.get('DB_PORT', 3306))
 DB_USER = os.environ.get('DB_USER', 'root')
-DB_PASS = os.environ.get('DB_PASS', '')  # ，@需要URL编码为%40
+DB_PASS = os.environ.get('DB_PASS', '')
 
 app.config['SECRET_KEY'] = 'campus-mis-secret-key-2024'
 # 主数据库：main_database（会话、服务注册、建筑等）

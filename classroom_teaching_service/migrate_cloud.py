@@ -1,10 +1,12 @@
 """Migrate classroom_teaching_service to cloud MySQL database."""
+import os
+
 import pymysql
 
-DB_HOST = '47.93.226.110'
+DB_HOST = os.environ.get('DB_HOST', '127.0.0.1')
 DB_PORT = 3306
 DB_USER = 'root'
-DB_PASS = ''
+DB_PASS = os.environ.get('DB_PASS_RAW', os.environ.get('DB_PASS', ''))
 
 def run():
     # === 1. Add name to users_database ===
